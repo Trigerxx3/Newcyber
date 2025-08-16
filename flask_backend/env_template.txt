@@ -1,0 +1,18 @@
+# Database Configuration (PostgreSQL for production, SQLite for development)
+# For development, comment out DATABASE_URL to use SQLite automatically
+# DATABASE_URL=postgresql://username:password@localhost:5432/cyber_intelligence_db
+
+# API Configuration (Flask backend)
+NEXT_PUBLIC_API_URL=http://localhost:5000
+
+# Flask Configuration
+SECRET_KEY=your-secret-key-change-in-production
+FLASK_ENV=development
+
+# JWT Configuration
+JWT_SECRET_KEY=jwt-secret-key-change-in-production
+JWT_ACCESS_TOKEN_EXPIRES=3600
+
+# File Storage Configuration (Local)
+UPLOAD_FOLDER=uploads
+MAX_CONTENT_LENGTH=16777216

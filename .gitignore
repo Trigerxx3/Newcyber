@@ -1,0 +1,66 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+local.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build outputs
+dist/
+build/
+.next/
+*.log
+
+# Flask
+instance/
+.webassets-cache
+
+# Python virtual environment
+bin/
+include/
+lib/
+share/
+pyvenv.cfg
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Coverage reports
+htmlcov/
+.coverage
+
+# Temporary files
+*.tmp
+*.temp
+
+# Embedded git repositories (handle separately)
+cyber/.git/
+osint_tools/sherlock/.git/
+osint_tools/spiderfoot/.git/
