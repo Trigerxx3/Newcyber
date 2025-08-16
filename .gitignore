@@ -64,3 +64,9 @@ htmlcov/
 cyber/.git/
 osint_tools/sherlock/.git/
 osint_tools/spiderfoot/.git/
+
+# Large binary files
+*.exe
+*.msi
+*.dmg
+*.pkg
