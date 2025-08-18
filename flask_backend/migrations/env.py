@@ -8,10 +8,16 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Import your models
-from models.user import User
+from models.user import User, SystemUser
 from models.source import Source
 from models.content import Content
-# ... import all your models
+from models.keyword import Keyword
+from models.detection import Detection
+from models.identifier import Identifier
+from models.osint_result import OSINTResult
+from models.case import Case
+from models.user_case_link import UserCaseLink
+from models.osint_identifier_link import OSINTIdentifierLink
 
 # this is the Alembic Config object
 config = context.config

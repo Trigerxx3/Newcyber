@@ -96,17 +96,28 @@ def signin():
     
     try:
         data = request.get_json() or {}
+        print(f"🔐 Signin request data: {data}")
+        
         # Normalize inputs
         raw_email = data.get('email') or ''
         email = raw_email.strip().lower()
         password = (data.get('password') or '')
+        
+        print(f"🔐 Processing login for email: {email} (original: {raw_email})")
 
         if not email or not password:
+            print("❌ Missing email or password")
             return jsonify({'error': 'Missing email or password'}), 400
 
         user = SystemUser.get_by_email(email)
-
+        print(f"🔐 User found: {user is not None}")
+        
+        if user:
+            password_valid = check_password_hash(user.password_hash, password)
+            print(f"🔐 Password valid: {password_valid}")
+        
         if not user or not check_password_hash(user.password_hash, password):
+            print("❌ Invalid credentials")
             return jsonify({'error': 'Invalid credentials'}), 401
 
         # Generate JWT token via flask_jwt_extended

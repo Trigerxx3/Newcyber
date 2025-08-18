@@ -27,17 +27,17 @@ def get_content():
         query = Content.query
         
         # Apply filters
-        if min_score is not None:
-            query = query.filter(Content.suspicion_score >= min_score)
+        # TODO: Add suspicion_score field to Content model later
+        # if min_score is not None:
+        #     query = query.filter(Content.suspicion_score >= min_score)
         if source_id:
             query = query.filter(Content.source_id == source_id)
         if user_id:
-            query = query.filter(Content.user_id == user_id)
+            query = query.filter(Content.created_by_id == user_id)
         
-        # Order by suspicion score and date (highest score and newest first)
+        # Order by date (newest first) - TODO: Add suspicion_score ordering later
         query = query.order_by(
-            Content.suspicion_score.desc(),
-            Content.posted_at.desc()
+            Content.created_at.desc()
         )
         
         # Get paginated results
@@ -112,51 +112,51 @@ def get_content_item(content_id):
     except SQLAlchemyError as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
-@content_bp.route('/<int:content_id>/score', methods=['PUT'])
-@require_auth
-def update_content_score(content_id):
-    """Update content suspicion score"""
-    try:
-        data = request.get_json()
-        score = data.get('suspicion_score')
-        
-        if score is None or not (0 <= score <= 100):
-            return jsonify({'error': 'Invalid suspicion score (0-100)'}), 400
-        
-        content = Content.query.get(content_id)
-        
-        if not content:
-            return jsonify({'error': 'Content not found'}), 404
-        
-        content.suspicion_score = score
-        db.session.commit()
-        
-        return jsonify({
-            'status': 'success',
-            'message': 'Content score updated successfully',
-            'data': content.to_dict()
-        }), 200
-    except SQLAlchemyError as e:
-        db.session.rollback()
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+# @content_bp.route('/<int:content_id>/score', methods=['PUT'])
+# @require_auth
+# def update_content_score(content_id):
+#     """Update content suspicion score"""
+#     try:
+#         data = request.get_json()
+#         score = data.get('suspicion_score')
+#         
+#         if score is None or not (0 <= score <= 100):
+#             return jsonify({'error': 'Invalid suspicion score (0-100)'}), 400
+#         
+#         content = Content.query.get(content_id)
+#         
+#         if not content:
+#             return jsonify({'error': 'Content not found'}), 404
+#         
+#         content.suspicion_score = score
+#         db.session.commit()
+#         
+#         return jsonify({
+#             'status': 'success',
+#             'message': 'Content score updated successfully',
+#             'data': content.to_dict()
+#         }), 200
+#     except SQLAlchemyError as e:
+#         db.session.rollback()
+#         return jsonify({'status': 'error', 'message': str(e)}), 500
 
-@content_bp.route('/high-risk', methods=['GET'])
-@require_auth
-def get_high_risk_content():
-    """Get high-risk content (score >= 70)"""
-    try:
-        # Get high-risk content ordered by suspicion score (highest first)
-        high_risk_content = Content.query.filter(
-            Content.suspicion_score >= 70
-        ).order_by(
-            Content.suspicion_score.desc()
-        ).limit(50).all()
-        
-        content_data = [content.to_dict() for content in high_risk_content]
-        
-        return jsonify({
-            'status': 'success',
-            'data': content_data
-        }), 200
-    except SQLAlchemyError as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+# @content_bp.route('/high-risk', methods=['GET'])
+# @require_auth
+# def get_high_risk_content():
+#     """Get high-risk content (score >= 70)"""
+#     try:
+#         # Get high-risk content ordered by suspicion score (highest first)
+#         high_risk_content = Content.query.filter(
+#             Content.suspicion_score >= 70
+#         ).order_by(
+#             Content.suspicion_score.desc()
+#         ).limit(50).all()
+#         
+#         content_data = [content.to_dict() for content in high_risk_content]
+#         
+#         return jsonify({
+#             'status': 'success',
+#             'data': content_data
+#         }), 200
+#     except SQLAlchemyError as e:
+#         return jsonify({'status': 'error', 'message': str(e)}), 500

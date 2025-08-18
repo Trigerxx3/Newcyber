@@ -2,56 +2,37 @@
 Flask app using SQLAlchemy with PostgreSQL/SQLite
 """
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 import os
 
 def create_app(config_name='development'):
     app = Flask(__name__)
     
-    # Add global CORS preflight handler
-    @app.before_request
-    def handle_preflight():
-        if request.method == "OPTIONS":
-            response = jsonify({})
-            # Dynamically reflect origin for preflight to avoid wildcard conflicts
-            origin = request.headers.get('Origin')
-            allowed_origins = {
-                'http://localhost:3000',
-                'http://127.0.0.1:3000',
-                'http://localhost:9002',
-                'http://127.0.0.1:9002',
-                'http://localhost:9003',
-                'http://127.0.0.1:9003',
-            }
-            if origin in allowed_origins:
-                response.headers['Access-Control-Allow-Origin'] = origin
-            response.headers['Vary'] = 'Origin'
-            response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With'
-            response.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,OPTIONS,PATCH'
-            response.headers['Access-Control-Max-Age'] = '600'
-            return response
-
-    # Add CORS headers to all responses
-    @app.after_request
-    def after_request(response):
-        origin = request.headers.get('Origin')
-        allowed_origins = {
-            'http://localhost:3000',
-            'http://127.0.0.1:3000',
-            'http://localhost:9002',
-            'http://127.0.0.1:9002',
-            'http://localhost:9003',
-            'http://127.0.0.1:9003',
-        }
-
-        if origin in allowed_origins:
-            response.headers['Access-Control-Allow-Origin'] = origin
-            response.headers['Vary'] = 'Origin'
-        # Only set credentials when origin is explicitly allowed
-        response.headers['Access-Control-Allow-Credentials'] = 'true'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With'
-        response.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,OPTIONS,PATCH'
-        response.headers['Access-Control-Max-Age'] = '600'
-        return response
+    # Disable automatic trailing slash redirects to prevent CORS preflight issues
+    app.url_map.strict_slashes = False
+    
+    # Configure CORS with comprehensive settings
+    CORS(app, 
+         origins=[
+             'http://localhost:3000',
+             'http://127.0.0.1:3000', 
+             'http://localhost:9002',
+             'http://127.0.0.1:9002',
+             'http://localhost:9003',
+             'http://127.0.0.1:9003'
+         ],
+         allow_headers=[
+             'Content-Type', 
+             'Authorization', 
+             'X-Requested-With',
+             'Accept',
+             'Origin',
+             'X-CSRF-Token'
+         ],
+         methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+         supports_credentials=True,
+         send_wildcard=False,
+         automatic_options=True)
     
     # Load configuration
     try:
@@ -80,12 +61,25 @@ def create_app(config_name='development'):
                 admin = SystemUser.get_by_email(admin_email)
                 if not admin:
                     admin = SystemUser(email=admin_email, username='admin', role=SystemUserRole.ADMIN)
+                    admin.set_password('admin123456')  # Set password before adding to session
                     db.session.add(admin)
                     db.session.commit()
-                # Reset password on each boot in dev for predictable creds
-                admin.set_password('admin123456')
+                else:
+                    # Reset password on each boot in dev for predictable creds
+                    admin.set_password('admin123456')
     except Exception as e:
         print(f"⚠️  Bootstrap admin failed: {e}")
+    
+    # Add global OPTIONS handler for CORS preflight requests
+    @app.before_request
+    def handle_preflight():
+        if request.method == "OPTIONS":
+            response = jsonify({})
+            response.headers.add("Access-Control-Allow-Origin", request.headers.get('Origin', '*'))
+            response.headers.add('Access-Control-Allow-Headers', "Content-Type,Authorization,X-Requested-With,Accept,Origin,X-CSRF-Token")
+            response.headers.add('Access-Control-Allow-Methods', "GET,POST,PUT,DELETE,OPTIONS,PATCH")
+            response.headers.add('Access-Control-Allow-Credentials', 'true')
+            return response
     
     # Register blueprints
     try:
@@ -118,6 +112,7 @@ def create_app(config_name='development'):
         from routes.dashboard import dashboard_bp
         from routes.users import users_bp
         from routes.cases import cases_bp
+        from routes.admin import admin_bp
         
         app.register_blueprint(sources_bp, url_prefix='/api/sources')
         app.register_blueprint(content_bp, url_prefix='/api/content')
@@ -125,6 +120,7 @@ def create_app(config_name='development'):
         app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
         app.register_blueprint(users_bp, url_prefix='/api/users')
         app.register_blueprint(cases_bp, url_prefix='/api/cases')
+        app.register_blueprint(admin_bp, url_prefix='/api/admin')
         print("✅ All API routes registered")
     except ImportError as e:
         print(f"⚠️  Warning: Could not import some API routes: {e}")

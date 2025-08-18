@@ -57,8 +57,26 @@ class ProductionConfig(Config):
     """Production configuration"""
     DEBUG = False
     # Use PostgreSQL for production
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
-        'postgresql://user:password@localhost/cyber_intelligence'
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL')
+    
+    # Enhanced connection pooling for production
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_size': 20,
+        'max_overflow': 50,
+        'pool_timeout': 60,
+        'pool_recycle': 3600,
+        'pool_pre_ping': True,
+        'connect_args': {
+            'sslmode': 'require',
+            'connect_timeout': 30,
+        }
+    }
+    
+    def __init__(self):
+        required_vars = ['DATABASE_URL', 'SECRET_KEY', 'JWT_SECRET_KEY']
+        missing = [var for var in required_vars if not os.environ.get(var)]
+        if missing:
+            raise ValueError(f"Required environment variables missing: {missing}")
     
     @staticmethod
     def init_app(app):
@@ -70,6 +88,8 @@ class ProductionConfig(Config):
         syslog_handler = SysLogHandler()
         syslog_handler.setLevel(logging.WARNING)
         app.logger.addHandler(syslog_handler)
+        
+        print(f"Production mode: Using database {app.config['SQLALCHEMY_DATABASE_URI'][:50]}...")
 
 class TestingConfig(Config):
     """Testing configuration"""

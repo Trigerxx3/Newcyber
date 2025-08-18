@@ -1,0 +1,29 @@
+# Flask Configuration
+FLASK_ENV=production
+SECRET_KEY=generate-secure-random-key-256-bits
+JWT_SECRET_KEY=generate-different-jwt-key-256-bits
+
+# Database Configuration (REQUIRED for production)
+DATABASE_URL=postgresql://username:password@host:port/database
+
+# Google OAuth Configuration
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+
+# Application Settings
+JWT_ACCESS_TOKEN_EXPIRES=24
+UPLOAD_FOLDER=/app/uploads
+MAX_CONTENT_LENGTH=16777216
+
+# Production Database Examples:
+# Heroku PostgreSQL:
+# DATABASE_URL=postgres://user:pass@host:5432/dbname
+
+# Railway PostgreSQL:
+# DATABASE_URL=postgresql://postgres:pass@host:5432/railway
+
+# DigitalOcean Managed Database:
+# DATABASE_URL=postgresql://user:pass@host:25060/defaultdb?sslmode=require
+
+# Note: Make sure to install psycopg2-binary for PostgreSQL support:
+# pip install psycopg2-binary==2.9.9

@@ -140,14 +140,16 @@ class Auth:
         """Get current authenticated user"""
         try:
             verify_jwt_in_request()
-            current_user_data = get_jwt_identity()
+            user_id = get_jwt_identity()
             
-            if not current_user_data:
+            if not user_id:
                 return None
             
-            user = SystemUser.query.get(current_user_data['user_id'])
+            # user_id is a string, not a dict
+            user = SystemUser.query.get(int(user_id))
             return user
-        except:
+        except Exception as e:
+            print(f"Debug: get_current_user error: {e}")
             return None
 
 # Decorators
