@@ -113,6 +113,7 @@ def create_app(config_name='development'):
         from routes.users import users_bp
         from routes.cases import cases_bp
         from routes.admin import admin_bp
+        from routes.scraping import scraping_bp
         
         app.register_blueprint(sources_bp, url_prefix='/api/sources')
         app.register_blueprint(content_bp, url_prefix='/api/content')
@@ -121,6 +122,7 @@ def create_app(config_name='development'):
         app.register_blueprint(users_bp, url_prefix='/api/users')
         app.register_blueprint(cases_bp, url_prefix='/api/cases')
         app.register_blueprint(admin_bp, url_prefix='/api/admin')
+        app.register_blueprint(scraping_bp, url_prefix='/api/scraping')
         print("✅ All API routes registered")
     except ImportError as e:
         print(f"⚠️  Warning: Could not import some API routes: {e}")
