@@ -70,3 +70,4 @@ osint_tools/spiderfoot/.git/
 *.msi
 *.dmg
 *.pkg
+flask_backend/.env_clean
