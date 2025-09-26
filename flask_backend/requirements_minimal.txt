@@ -6,6 +6,7 @@ python-dotenv==1.0.0
 requests==2.31.0
 bcrypt==4.0.1
 Werkzeug==2.3.7
+instaloader>=4.10
 
 # Essential scraping tools (install separately if needed)
 # telethon  # For Telegram - install separately: pip install telethon

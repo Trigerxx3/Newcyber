@@ -32,7 +32,6 @@ class User(BaseModel):
     
     # Relationships
     content = db.relationship('Content', backref='user', lazy='dynamic', cascade='all, delete-orphan')
-    case_links = db.relationship('UserCaseLink', backref='user', lazy='dynamic', cascade='all, delete-orphan')
     
     def __repr__(self):
         return f'<User {self.username or "Unknown"} ({self.platform_user_id or "No ID"})>'
@@ -79,6 +78,9 @@ class SystemUser(BaseModel):
     
     # Timestamps
     last_login = db.Column(db.DateTime)
+    
+    # Relationships
+    case_links = db.relationship('UserCaseLink', foreign_keys='UserCaseLink.user_id', backref='system_user', lazy='dynamic', cascade='all, delete-orphan')
     
     def __repr__(self):
         return f'<SystemUser {self.username} ({self.role.value})>'

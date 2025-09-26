@@ -97,35 +97,27 @@ def create_app(config_name='development'):
                 'message': 'Flask backend is running',
                 'service': 'Cyber Intelligence Platform API'
             })
-    
-    try:
-        from routes.auth import auth_bp
-        app.register_blueprint(auth_bp, url_prefix='/api/auth')
-        print("✅ Auth routes registered")
-    except ImportError as e:
-        print(f"⚠️  Warning: Could not import auth routes: {e}")
-    
-    try:
-        from routes.sources import sources_bp
-        from routes.content import content_bp
-        from routes.osint import osint_bp
-        from routes.dashboard import dashboard_bp
-        from routes.users import users_bp
-        from routes.cases import cases_bp
-        from routes.admin import admin_bp
-        from routes.scraping import scraping_bp
-        
-        app.register_blueprint(sources_bp, url_prefix='/api/sources')
-        app.register_blueprint(content_bp, url_prefix='/api/content')
-        app.register_blueprint(osint_bp, url_prefix='/api/osint')
-        app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
-        app.register_blueprint(users_bp, url_prefix='/api/users')
-        app.register_blueprint(cases_bp, url_prefix='/api/cases')
-        app.register_blueprint(admin_bp, url_prefix='/api/admin')
-        app.register_blueprint(scraping_bp, url_prefix='/api/scraping')
-        print("✅ All API routes registered")
-    except ImportError as e:
-        print(f"⚠️  Warning: Could not import some API routes: {e}")
+
+    # Individually register each API blueprint to avoid all-or-nothing failures
+    def safe_register(import_path: str, var_name: str, url_prefix: str):
+        try:
+            module = __import__(import_path, fromlist=[var_name])
+            bp = getattr(module, var_name)
+            app.register_blueprint(bp, url_prefix=url_prefix)
+            print(f"✅ Registered {import_path} at {url_prefix}")
+        except Exception as e:
+            print(f"⚠️  Warning: Failed to register {import_path}: {e}")
+
+    safe_register('routes.auth', 'auth_bp', '/api/auth')
+    safe_register('routes.sources', 'sources_bp', '/api/sources')
+    safe_register('routes.content', 'content_bp', '/api/content')
+    safe_register('routes.osint', 'osint_bp', '/api/osint')
+    safe_register('routes.dashboard', 'dashboard_bp', '/api/dashboard')
+    safe_register('routes.users', 'users_bp', '/api/users')
+    safe_register('routes.cases', 'cases_bp', '/api/cases')
+    safe_register('routes.admin', 'admin_bp', '/api/admin')
+    safe_register('routes.scraping', 'scraping_bp', '/api/scraping')
+    safe_register('routes.instagram', 'instagram_bp', '/api')
     
     # Add a simple API root endpoint
     @app.route('/api')

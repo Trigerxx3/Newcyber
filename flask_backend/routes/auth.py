@@ -252,6 +252,11 @@ def profile():
     
     ident = get_jwt_identity()
     user_id = ident
+    # Ensure identity is an integer ID
+    try:
+        user_id = int(user_id) if user_id is not None else None
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Invalid token'}), 401
     if not user_id:
         return jsonify({'error': 'Invalid token'}), 401
     user = SystemUser.query.get(user_id)

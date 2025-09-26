@@ -27,7 +27,7 @@ class UserCaseLink(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     
     # Foreign Keys
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('system_users.id'), nullable=False, index=True)
     case_id = db.Column(db.Integer, db.ForeignKey('cases.id'), nullable=False, index=True)
     
     # Role and Status

@@ -10,3 +10,4 @@ from .osint_result import OSINTResult, OSINTSearchType, OSINTStatus
 from .osint_identifier_link import OSINTIdentifierLink, LinkType, LinkConfidence
 from .case import Case, CaseStatus, CasePriority, CaseType
 from .user_case_link import UserCaseLink, UserCaseRole, UserCaseStatus
+from .case_request import CaseRequest, RequestStatus

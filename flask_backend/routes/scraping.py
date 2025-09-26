@@ -14,10 +14,26 @@ import json
 import uuid
 import asyncio
 
-# Import scraping services
-from services.telegram_scraper import get_telegram_scraper
-from services.instagram_scraper import get_instagram_scraper
-from services.whatsapp_scraper import get_whatsapp_scraper
+# Lazy-safe service imports to avoid module import failures
+try:
+	from services.telegram_scraper import get_telegram_scraper
+except Exception:
+	get_telegram_scraper = None
+
+try:
+	from services.instagram_scraper_service import InstagramScraperService
+except Exception:
+	InstagramScraperService = None
+
+try:
+	from services.whatsapp_scraper import get_whatsapp_scraper
+except Exception:
+	get_whatsapp_scraper = None
+
+try:
+	from services.telegram_web_scraper import TelegramWebScraper
+except Exception:
+	TelegramWebScraper = None
 
 scraping_bp = Blueprint('scraping', __name__)
 
@@ -28,68 +44,58 @@ scraping_jobs = {}
 @require_auth
 @require_role('Admin')
 def get_scraping_stats():
-    """Get comprehensive scraping statistics"""
-    try:
-        # Calculate stats from actual data and mock jobs
-        total_jobs = len(scraping_jobs)
-        active_jobs = len([job for job in scraping_jobs.values() if job['status'] == 'running'])
-        paused_jobs = len([job for job in scraping_jobs.values() if job['status'] == 'paused'])
-        
-        # Get content stats
-        total_content = Content.query.count() if Content.query.first() else 0
-        today = datetime.now().date()
-        today_scraped = Content.query.filter(
-            func.date(Content.created_at) == today
-        ).count() if Content.query.first() else 0
-        
-        # Calculate average per day (last 7 days)
-        week_ago = datetime.now() - timedelta(days=7)
-        week_content = Content.query.filter(
-            Content.created_at >= week_ago
-        ).count() if Content.query.first() else 0
-        average_per_day = round(week_content / 7)
-        
-        # Platform distribution
-        platforms = {
-            'telegram': {'jobs': 0, 'content': 0},
-            'instagram': {'jobs': 0, 'content': 0},
-            'whatsapp': {'jobs': 0, 'content': 0}
-        }
-        
-        # Count jobs by platform
-        for job in scraping_jobs.values():
-            platform = job.get('platform', 'telegram')
-            if platform in platforms:
-                platforms[platform]['jobs'] += 1
-        
-        # Count content by platform (would need platform field in Content model)
-        # For now, distribute randomly
-        if total_content > 0:
-            platforms['telegram']['content'] = int(total_content * 0.6)
-            platforms['instagram']['content'] = int(total_content * 0.3)
-            platforms['whatsapp']['content'] = int(total_content * 0.1)
-        
-        # Top sources (mock data for now)
-        top_sources = [
-            {'name': '@cyberthreat_news', 'platform': 'telegram', 'content': 1250},
-            {'name': '@security_alerts', 'platform': 'telegram', 'content': 890},
-            {'name': 'cybersec_daily', 'platform': 'instagram', 'content': 456},
-            {'name': 'threat_intel', 'platform': 'whatsapp', 'content': 234}
-        ]
-        
-        return jsonify({
-            'totalJobs': total_jobs,
-            'activeJobs': active_jobs,
-            'pausedJobs': paused_jobs,
-            'totalContent': total_content,
-            'todayScraped': today_scraped,
-            'averagePerDay': average_per_day,
-            'platforms': platforms,
-            'topSources': top_sources
-        })
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+	"""Get comprehensive scraping statistics"""
+	try:
+		# Calculate stats from actual data and mock jobs
+		total_jobs = len(scraping_jobs)
+		active_jobs = sum(1 for j in scraping_jobs.values() if j.get('status') == 'running')
+		paused_jobs = sum(1 for j in scraping_jobs.values() if j.get('status') == 'paused')
+		
+		# Content stats
+		total_content = Content.query.count() if Content.query else 0
+		content_today = Content.query.filter(
+			Content.created_at >= datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+		).count() if Content.query else 0
+		
+		# Platform breakdown
+		platforms = {
+			'telegram': {
+				'jobs': sum(1 for j in scraping_jobs.values() if j.get('platform') == 'telegram'),
+				'content': 0
+			},
+			'instagram': {
+				'jobs': sum(1 for j in scraping_jobs.values() if j.get('platform') == 'instagram'),
+				'content': 0
+			},
+			'whatsapp': {
+				'jobs': sum(1 for j in scraping_jobs.values() if j.get('platform') == 'whatsapp'),
+				'content': 0
+			}
+		}
+		
+		# Compute content per platform
+		latest_content = Content.query.order_by(desc(Content.created_at)).limit(500).all()
+		for item in latest_content:
+			source = getattr(item, 'source', None)
+			platform = getattr(getattr(source, 'platform', None), 'value', '').lower() if source else ''
+			if platform in platforms:
+				platforms[platform]['content'] += 1
+		
+		# Mock top sources (could query sources table)
+		top_sources = []
+		
+		return jsonify({
+			'totalJobs': total_jobs,
+			'activeJobs': active_jobs,
+			'pausedJobs': paused_jobs,
+			'totalContent': total_content,
+			'todayScraped': content_today,
+			'averagePerDay': max(content_today, 0),
+			'platforms': platforms,
+			'topSources': top_sources
+		})
+	except Exception as e:
+		return jsonify({'error': str(e)}), 500
 
 @scraping_bp.route('/jobs', methods=['GET', 'POST'])
 @require_auth
@@ -233,16 +239,58 @@ def run_scraping_job_now(job_id):
         job['lastRun'] = datetime.now().isoformat()
         job['updatedAt'] = datetime.now().isoformat()
         
-        # In production, this would trigger the actual scraping process
-        # For now, simulate some activity
-        import random
-        job['newItems'] = random.randint(5, 50)
-        job['totalScraped'] += job['newItems']
+        platform = (job.get('platform') or '').lower()
+        target = job.get('target') or ''
+        target_type = (job.get('targetType') or '').lower()
+        settings = job.get('settings') or {}
+        max_items = int(settings.get('maxItems') or 10)
+        
+        new_items = 0
+        message = 'Job started successfully'
+        
+        try:
+            if platform == 'instagram':
+                svc = InstagramScraperService()
+                if target_type == 'profile':
+                    result = svc.scrape_profile(target)
+                elif target_type == 'hashtag':
+                    result = svc.scrape_hashtag(target.lstrip('#'), max_items)
+                elif target_type == 'post':
+                    result = svc.scrape_post(target)
+                else:
+                    return jsonify({'error': f'Unsupported targetType for Instagram: {target_type}'}), 400
+                
+                if 'error' in result:
+                    job['errors'] = job.get('errors', 0) + 1
+                    job['status'] = 'stopped'
+                    job['updatedAt'] = datetime.now().isoformat()
+                    return jsonify({'id': job_id, 'status': job['status'], 'message': result['error']}), 200
+                
+                posts = result.get('posts', [])
+                new_items = len(posts)
+                message = f"Instagram {target_type} scraped: {new_items} posts"
+            else:
+                # Fallback: simulate activity for other platforms until wired
+                import random
+                new_items = random.randint(5, 50)
+                message = f"Simulated run completed: {new_items} new items"
+        except Exception as scrape_error:
+            job['errors'] = job.get('errors', 0) + 1
+            job['status'] = 'stopped'
+            job['updatedAt'] = datetime.now().isoformat()
+            return jsonify({'id': job_id, 'status': job['status'], 'message': f'Error: {str(scrape_error)}'}), 200
+        
+        job['newItems'] = int(new_items)
+        job['totalScraped'] = int(job.get('totalScraped', 0)) + int(new_items)
+        job['status'] = 'stopped'
+        job['updatedAt'] = datetime.now().isoformat()
         
         return jsonify({
             'id': job_id,
             'status': job['status'],
-            'message': 'Job started successfully'
+            'message': message,
+            'newItems': job['newItems'],
+            'totalScraped': job['totalScraped']
         })
         
     except Exception as e:
@@ -293,6 +341,24 @@ def get_scraped_content():
         return jsonify(content_data)
         
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@scraping_bp.route('/content/<int:content_id>', methods=['DELETE'])
+@require_auth
+@require_role('Admin')
+def delete_scraped_content(content_id: int):
+    """Delete a scraped content item by ID"""
+    try:
+        content = Content.query.get(content_id)
+        if not content:
+            return jsonify({'error': 'Content not found'}), 404
+        
+        db.session.delete(content)
+        db.session.commit()
+        
+        return jsonify({'status': 'success', 'message': 'Content deleted'})
+    except Exception as e:
+        db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
 @scraping_bp.route('/export/<data_type>', methods=['GET'])
@@ -349,26 +415,61 @@ def get_telegram_channels():
 def scrape_telegram_channel():
     """Scrape a Telegram channel manually"""
     try:
-        data = request.get_json()
-        channel_id = data.get('channel_id')
-        max_messages = data.get('max_messages', 50)
-        keywords = data.get('keywords', [])
+        # Accept JSON body, form data, or query params
+        data = request.get_json(silent=True) or {}
+        channel_id = (
+            data.get('channel_id') or
+            data.get('channel') or
+            data.get('username') or
+            data.get('target') or
+            request.form.get('channel_id') or
+            request.form.get('channel') or
+            request.args.get('channel_id') or
+            request.args.get('channel') or
+            request.args.get('username') or
+            request.args.get('target')
+        )
+        if channel_id:
+            channel_id = channel_id.lstrip('@').strip()
+        
+        max_messages = (
+            data.get('max_messages') or
+            data.get('limit') or
+            request.form.get('max_messages') or
+            request.args.get('max_messages') or
+            request.args.get('limit') or 50
+        )
+        try:
+            max_messages = int(max_messages)
+        except Exception:
+            max_messages = 50
+        
+        keywords = data.get('keywords') or []
+        if isinstance(keywords, str):
+            # allow comma-separated string
+            keywords = [k.strip() for k in keywords.split(',') if k.strip()]
         
         if not channel_id:
-            return jsonify({'error': 'Channel ID is required'}), 400
+            return jsonify({'error': 'Channel ID is required (use channel_id or channel or username).'}), 400
         
-        # Get real Telegram scraper
-        telegram_scraper = get_telegram_scraper()
-        
-        # Use asyncio to call async scraping method
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            scrape_result = loop.run_until_complete(
-                telegram_scraper.scrape_channel(channel_id, max_messages, keywords)
-            )
-        finally:
-            loop.close()
+        if get_telegram_scraper is None:
+            # Fallback to web scraper if available
+            if TelegramWebScraper is None:
+                return jsonify({'error': 'Telegram scraper not available on server'}), 500
+            web_scraper = TelegramWebScraper()
+            messages = web_scraper.scrape_channel(channel_id, limit=max_messages)
+            scrape_result = { 'channel_title': channel_id, 'messages': messages }
+        else:
+            # Use asyncio to call async scraping methods, including getting the scraper
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                telegram_scraper = loop.run_until_complete(get_telegram_scraper())
+                scrape_result = loop.run_until_complete(
+                    telegram_scraper.scrape_channel(channel_id, max_messages, keywords)
+                )
+            finally:
+                loop.close()
         
         # Store scraped data in database
         scraped_count = 0
@@ -412,16 +513,19 @@ def scrape_telegram_channel():
             db.session.rollback()
             print(f"Error storing scraped data: {db_error}")
         
+        # Return fields matching frontend expectations too
         return jsonify({
             'channel_id': channel_id,
+            'channel': channel_id,
             'scraped_count': scraped_count,
+            'saved_to_db': scraped_count,
             'total_messages': len(scrape_result.get('messages', [])),
             'message': f'Successfully scraped {scraped_count} messages from {channel_id}',
             'scrape_result': scrape_result
         })
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': f'Telegram scraping failed: {str(e)}'}), 500
 
 # Instagram-specific endpoints
 @scraping_bp.route('/instagram/profiles', methods=['GET'])
@@ -431,7 +535,7 @@ def get_instagram_profiles():
     """Get Instagram profiles for scraping"""
     try:
         # Get real Instagram scraper
-        instagram_scraper = get_instagram_scraper()
+        instagram_scraper = InstagramScraperService()
         
         # Search for some popular cybersecurity accounts
         search_queries = ['cybersecurity', 'infosec', 'hacking']
@@ -474,7 +578,7 @@ def scrape_instagram_profile():
             return jsonify({'error': 'Username is required'}), 400
         
         # Get real Instagram scraper
-        instagram_scraper = get_instagram_scraper()
+        instagram_scraper = InstagramScraperService()
         
         # Scrape the profile
         scrape_result = instagram_scraper.scrape_user_posts(username, max_posts)
@@ -638,7 +742,7 @@ def health_check():
         }
         
         try:
-            instagram_scraper = get_instagram_scraper()
+            instagram_scraper = InstagramScraperService()
             initialized = instagram_scraper.initialize()
             instagram_status['available'] = True
             instagram_status['api_connected'] = initialized

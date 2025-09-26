@@ -19,13 +19,20 @@ class CasePriority(enum.Enum):
     CRITICAL = "critical"
 
 class CaseType(enum.Enum):
-    """Enum for case types"""
+    """Enum for case types - focused on drug-related content analysis and detection"""
+    DRUG_TRAFFICKING_INVESTIGATION = "drug_trafficking_investigation"
+    SUBSTANCE_ABUSE_DETECTION = "substance_abuse_detection"
+    SOCIAL_MEDIA_MONITORING = "social_media_monitoring"
+    SUSPICIOUS_CONTENT_ANALYSIS = "suspicious_content_analysis"
+    USER_BEHAVIOR_ANALYSIS = "user_behavior_analysis"
+    NETWORK_DISRUPTION = "network_disruption"
+    COMPLIANCE_ENFORCEMENT = "compliance_enforcement"
+    OSINT_INVESTIGATION = "osint_investigation"
     THREAT_INVESTIGATION = "threat_investigation"
     INCIDENT_RESPONSE = "incident_response"
     VULNERABILITY_ASSESSMENT = "vulnerability_assessment"
     COMPLIANCE_AUDIT = "compliance_audit"
     FORENSIC_ANALYSIS = "forensic_analysis"
-    OSINT_INVESTIGATION = "osint_investigation"
     MALWARE_ANALYSIS = "malware_analysis"
     NETWORK_MONITORING = "network_monitoring"
     CUSTOM = "custom"
@@ -41,7 +48,7 @@ class Case(db.Model):
     title = db.Column(db.String(255), nullable=False, index=True)
     description = db.Column(db.Text)
     case_number = db.Column(db.String(50), unique=True, nullable=False, index=True)
-    type = db.Column(db.Enum(CaseType), nullable=False, default=CaseType.CUSTOM)
+    type = db.Column(db.Enum(CaseType), nullable=False, default=CaseType.DRUG_TRAFFICKING_INVESTIGATION)
     
     # Status and Priority
     status = db.Column(db.Enum(CaseStatus), nullable=False, default=CaseStatus.OPEN)

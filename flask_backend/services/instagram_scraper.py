@@ -30,6 +30,7 @@ class InstagramScraper:
         self.username = os.environ.get('INSTAGRAM_USERNAME')
         self.password = os.environ.get('INSTAGRAM_PASSWORD')
         self.api_client = None
+        self.is_authenticated = False
         self.rate_limit_delay = 2  # Seconds between requests
         
         # Instagram Basic Display API endpoints
@@ -43,35 +44,49 @@ class InstagramScraper:
             # Try to use instagrapi for more robust scraping
             from instagrapi import Client
             
-            if not self.username or not self.password:
+            if not self.username or not self.password or self.username == 'your_instagram_username' or self.password == 'your_instagram_password':
                 logger.warning("Instagram credentials not found. Please set INSTAGRAM_USERNAME and INSTAGRAM_PASSWORD")
                 logger.info("Note: Use a dedicated account for scraping to avoid issues with your main account")
+                logger.info("Currently using MOCK DATA for Instagram scraping")
+                self.is_authenticated = False
                 return False
             
+            logger.info(f"Attempting to authenticate Instagram account: {self.username}")
             self.api_client = Client()
             
             # Login with credentials
             try:
                 self.api_client.login(self.username, self.password)
-                logger.info("Instagram client initialized successfully")
+                self.is_authenticated = True
+                logger.info(f"✅ Instagram authentication successful for: {self.username}")
+                logger.info("🔥 REAL INSTAGRAM SCRAPING IS NOW ACTIVE!")
                 return True
             except Exception as login_error:
-                logger.error(f"Instagram login failed: {login_error}")
-                logger.info("Consider using Instagram Basic Display API with proper authentication")
+                logger.error(f"❌ Instagram login failed for {self.username}: {login_error}")
+                logger.warning("Common issues:")
+                logger.warning("  • Incorrect username/password")
+                logger.warning("  • Account suspended or restricted")
+                logger.warning("  • Two-factor authentication enabled")
+                logger.warning("  • Instagram detected automation")
+                logger.info("Falling back to MOCK DATA mode")
+                self.api_client = None
+                self.is_authenticated = False
                 return False
             
         except ImportError:
             logger.error("instagrapi not installed. Install with: pip install instagrapi")
             logger.info("Run: pip install instagrapi")
+            self.is_authenticated = False
             return False
         except Exception as e:
             logger.error(f"Failed to initialize Instagram client: {e}")
+            self.is_authenticated = False
             return False
     
     def get_user_info(self, username: str) -> Optional[Dict[str, Any]]:
         """Get information about a public Instagram user"""
         try:
-            if not self.api_client:
+            if not self.api_client or not self.is_authenticated:
                 return self._get_mock_user_info(username)
             
             # Get user info
@@ -109,8 +124,11 @@ class InstagramScraper:
             Dictionary containing scraped posts and metadata
         """
         try:
-            if not self.api_client:
+            if not self.api_client or not self.is_authenticated:
+                logger.info(f"📄 Generating mock data for @{username} (Instagram API not configured)")
                 return self._mock_scrape_posts(username, max_posts)
+            
+            logger.info(f"🔍 Scraping REAL Instagram data for @{username} (max: {max_posts} posts)...")
             
             # Get user ID first
             user_info = self.api_client.user_info_by_username(username)
@@ -174,7 +192,8 @@ class InstagramScraper:
                 }
             }
             
-            logger.info(f"Successfully scraped {len(posts)} posts from @{username}")
+            logger.info(f"✅ Successfully scraped {len(posts)} REAL posts from @{username}!")
+            logger.info(f"📊 Stats: {user_info.follower_count:,} followers, {user_info.media_count:,} total posts")
             return result
             
         except Exception as e:
@@ -193,7 +212,7 @@ class InstagramScraper:
             Dictionary containing scraped posts and metadata
         """
         try:
-            if not self.api_client:
+            if not self.api_client or not self.is_authenticated:
                 return self._mock_scrape_hashtag(hashtag, max_posts)
             
             # Get hashtag media
@@ -246,7 +265,7 @@ class InstagramScraper:
     def search_users(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
         """Search for Instagram users"""
         try:
-            if not self.api_client:
+            if not self.api_client or not self.is_authenticated:
                 return self._mock_search_users(query, limit)
             
             users = self.api_client.search_users(query)[:limit]
@@ -273,7 +292,7 @@ class InstagramScraper:
     def get_post_comments(self, post_shortcode: str, max_comments: int = 50) -> List[Dict[str, Any]]:
         """Get comments from a specific post"""
         try:
-            if not self.api_client:
+            if not self.api_client or not self.is_authenticated:
                 return []
             
             # Get media by shortcode
