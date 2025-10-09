@@ -297,3 +297,4 @@ def get_instagram_scraper_db():
     """Get the global Instagram DB scraper instance"""
     return instagram_scraper_db
 
+

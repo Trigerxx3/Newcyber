@@ -11,6 +11,10 @@ class PlatformType(enum.Enum):
     TELEGRAM = 'Telegram'
     INSTAGRAM = 'Instagram'
     WHATSAPP = 'WhatsApp'
+    FACEBOOK = 'Facebook'
+    TWITTER = 'Twitter'
+    TIKTOK = 'TikTok'
+    UNKNOWN = 'Unknown'
 
 class SourceType(enum.Enum):
     """Enum for source types"""

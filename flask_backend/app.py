@@ -111,6 +111,7 @@ def create_app(config_name='development'):
     safe_register('routes.auth', 'auth_bp', '/api/auth')
     safe_register('routes.sources', 'sources_bp', '/api/sources')
     safe_register('routes.content', 'content_bp', '/api/content')
+    safe_register('routes.content_analysis', 'content_analysis_bp', '/api/content-analysis')
     safe_register('routes.osint', 'osint_bp', '/api/osint')
     safe_register('routes.dashboard', 'dashboard_bp', '/api/dashboard')
     safe_register('routes.users', 'users_bp', '/api/users')
@@ -131,6 +132,7 @@ def create_app(config_name='development'):
                 'auth': '/api/auth/*',
                 'sources': '/api/sources',
                 'content': '/api/content',
+                'content-analysis': '/api/content-analysis/*',
                 'osint': '/api/osint',
                 'dashboard': '/api/dashboard'
             }

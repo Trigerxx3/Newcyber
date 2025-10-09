@@ -54,6 +54,9 @@ class Content(BaseModel):
     keywords = db.Column(db.JSON)  # Array of detected keywords
     analysis_summary = db.Column(db.Text)
     analysis_data = db.Column(db.JSON)  # Detailed analysis results
+    suspicion_score = db.Column(db.Integer, default=0)  # Suspicion score (0-100)
+    intent = db.Column(db.String(50), default='Unknown')  # Detected intent (Selling, Buying, Informational, Unknown)
+    is_flagged = db.Column(db.Boolean, default=False)  # Whether content is flagged for review
     
     # Metadata
     language = db.Column(db.String(10), default='en')
@@ -93,6 +96,9 @@ class Content(BaseModel):
             'keywords': self.keywords,
             'analysis_summary': self.analysis_summary,
             'analysis_data': self.analysis_data,
+            'suspicion_score': self.suspicion_score,
+            'intent': self.intent,
+            'is_flagged': self.is_flagged,
             'language': self.language,
             'word_count': self.word_count,
             'character_count': self.character_count,
@@ -105,7 +111,8 @@ class Content(BaseModel):
             'updated_at': self.updated_at.isoformat()
         }
     
-    def update_analysis(self, analysis_data, risk_level=None, keywords=None, summary=None):
+    def update_analysis(self, analysis_data, risk_level=None, keywords=None, summary=None, 
+                       suspicion_score=None, intent=None, is_flagged=None):
         """Update content analysis results"""
         self.analysis_data = analysis_data
         self.last_analyzed = datetime.utcnow()
@@ -117,6 +124,12 @@ class Content(BaseModel):
             self.keywords = keywords
         if summary:
             self.analysis_summary = summary
+        if suspicion_score is not None:
+            self.suspicion_score = suspicion_score
+        if intent:
+            self.intent = intent
+        if is_flagged is not None:
+            self.is_flagged = is_flagged
             
         db.session.commit()
     
