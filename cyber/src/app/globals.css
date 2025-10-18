@@ -1,0 +1,116 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 240 10% 4%;
+    --foreground: 0 0% 95%;
+    --card: 240 10% 4%;
+    --card-foreground: 0 0% 95%;
+    --popover: 240 10% 4%;
+    --popover-foreground: 0 0% 95%;
+    --primary: 172 100% 50%;
+    --primary-foreground: 240 10% 4%;
+    --secondary: 240 5% 15%;
+    --secondary-foreground: 0 0% 95%;
+    --muted: 240 5% 15%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 172 100% 50%;
+    --accent-foreground: 240 10% 4%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5% 25%;
+    --input: 240 5% 25%;
+    --ring: 172 100% 50%;
+    --radius: 0.5rem;
+  }
+  .dark {
+    --background: 240 10% 4%;
+    --foreground: 0 0% 95%;
+    --card: 240 10% 4%;
+    --card-foreground: 0 0% 95%;
+    --popover: 240 10% 4%;
+    --popover-foreground: 0 0% 95%;
+    --primary: 172 100% 50%;
+    --primary-foreground: 240 10% 4%;
+    --secondary: 240 5% 15%;
+    --secondary-foreground: 0 0% 95%;
+    --muted: 240 5% 15%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 172 100% 50%;
+    --accent-foreground: 240 10% 4%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5% 25%;
+    --input: 240 5% 25%;
+    --ring: 172 100% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  .animated-gradient-border-button {
+      position: relative;
+      overflow: hidden;
+  }
+
+  .animated-gradient-border-button::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: conic-gradient(
+          hsl(var(--primary)) 0deg,
+          hsl(var(--primary) / 0.5) 90deg,
+          transparent 180deg,
+          hsl(var(--primary) / 0.5) 270deg,
+          hsl(var(--primary)) 360deg
+      );
+      animation: rotate 4s linear infinite;
+      z-index: 1;
+  }
+
+  .animated-gradient-border-button > * {
+      position: relative;
+      z-index: 2;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .glassmorphism {
+    background: hsl(var(--secondary) / 0.5);
+    @apply backdrop-blur-lg border border-white/10;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes rotate {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
