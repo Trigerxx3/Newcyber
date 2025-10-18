@@ -16,8 +16,8 @@ class OSINTToolsService:
     """Service for running real OSINT tools like Sherlock and Spiderfoot"""
     
     def __init__(self):
-        self.tools_dir = Path(__file__).parent.parent / "osint_tools"
-        self.sherlock_path = self.tools_dir / "sherlock" / "sherlock" / "sherlock.py"
+        self.tools_dir = Path(__file__).parent.parent.parent / "osint_tools"  # Go up one more level
+        self.sherlock_path = self.tools_dir / "sherlock" / "sherlock_project" / "sherlock.py"
         self.spiderfoot_path = self.tools_dir / "spiderfoot" / "sf.py"
         
         # Alternative paths if installed globally
@@ -120,10 +120,10 @@ class OSINTToolsService:
             
             # Run Spiderfoot with basic modules for username investigation
             cmd = [
-                'python3', str(self.spiderfoot_path),
+                'python', str(self.spiderfoot_path),
                 '-s', target,
                 '-t', scan_type,
-                '-m', 'sfp_accounts,sfp_social,sfp_github,sfp_instagram,sfp_twitter',
+                '-m', 'sfp_accounts,sfp_social,sfp_github',
                 '-q'  # Quiet mode
             ]
             
@@ -132,8 +132,8 @@ class OSINTToolsService:
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=180,  # 3 minutes timeout
-                cwd=self.spiderfoot_path.parent
+                timeout=60,  # 1 minute timeout
+                cwd=str(self.spiderfoot_path.parent)
             )
             
             return {
@@ -176,77 +176,39 @@ class OSINTToolsService:
 
     def run_spiderfoot_username_scan(self, username: str) -> Dict:
         """Run SpiderFoot specifically for username investigation"""
+        # Use API-based approach instead of CLI (more stable)
         try:
-            if not self.spiderfoot_path.exists():
-                return {
-                    'error': 'Spiderfoot not installed',
-                    'message': 'Spiderfoot not found at expected path'
-                }
+            from .spiderfoot_api import run_spiderfoot_via_api
             
-            # Create unique scan name
-            scan_name = f"user_investigation_{username}_{int(time.time())}"
+            logger.info(f"Running SpiderFoot via API for: {username}")
+            result = run_spiderfoot_via_api(username)
             
-            # Use comprehensive modules for username investigation
-            modules = [
-                'sfp_accounts',      # Social media accounts
-                'sfp_social',        # Social networks
-                'sfp_github',        # GitHub profiles
-                'sfp_instagram',     # Instagram
-                'sfp_twitter',       # Twitter/X
-                'sfp_linkedin',      # LinkedIn
-                'sfp_keybase',       # Keybase
-                'sfp_myspace',       # MySpace
-                'sfp_hunter',        # Email hunter
-                'sfp_emailrep',      # Email reputation
-                'sfp_haveibeenpwned' # Data breaches
-            ]
-            
-            cmd = [
-                'python3', str(self.spiderfoot_path / 'sf.py'),
-                '-s', username,
-                '-t', 'USERNAME',
-                '-m', ','.join(modules),
-                '-q',  # Quiet mode
-                '-o', 'json'  # JSON output
-            ]
-            
-            logger.info(f"Running SpiderFoot username scan for: {username}")
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=300,  # 5 minutes timeout
-                cwd=self.spiderfoot_path.parent
-            )
-            
-            if result.returncode == 0:
-                parsed_results = self._parse_spiderfoot_json_output(result.stdout)
-                return {
-                    'tool': 'spiderfoot',
-                    'target': username,
-                    'status': 'completed',
-                    'findings': parsed_results,
-                    'raw_output': result.stdout,
-                    'scan_name': scan_name
-                }
+            if result['status'] == 'completed':
+                logger.info(f"SpiderFoot API scan completed with {len(result.get('findings', []))} findings")
+                return result
             else:
-                return {
-                    'error': 'spiderfoot_failed',
-                    'message': f'SpiderFoot scan failed: {result.stderr}',
-                    'raw_error': result.stderr
-                }
-            
-        except subprocess.TimeoutExpired:
-            logger.error(f"SpiderFoot timeout for username: {username}")
+                logger.warning(f"SpiderFoot API scan failed: {result.get('error', 'Unknown error')}")
+                return result
+                
+        except ImportError:
+            logger.error("Spiderfoot API module not available")
             return {
-                'error': 'timeout',
-                'message': 'SpiderFoot scan timed out after 5 minutes'
+                'tool': 'spiderfoot',
+                'target': username,
+                'status': 'error',
+                'findings': [],
+                'error': 'Spiderfoot API module not available'
             }
         except Exception as e:
-            logger.error(f"SpiderFoot error: {e}")
+            logger.error(f"SpiderFoot API error: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return {
-                'error': str(e),
-                'message': 'Failed to run SpiderFoot'
+                'tool': 'spiderfoot',
+                'target': username,
+                'status': 'error',
+                'findings': [],
+                'error': str(e)
             }
 
     def _parse_spiderfoot_json_output(self, output: str) -> List[Dict]:
@@ -436,21 +398,21 @@ class OSINTToolsService:
             # Run Sherlock with proper output capture
             cmd = [
                 'python', 
-                str(self.sherlock_path / 'sherlock' / 'sherlock.py'),
+                str(self.sherlock_path),
                 username,
                 '--print-found',  # Only print found profiles
                 '--no-color',     # Remove color codes
-                '--timeout', '10'
+                '--timeout', '5'
             ]
             
             logger.info(f"Running Sherlock command: {' '.join(cmd)}")
             
             result = subprocess.run(
                 cmd,
-                cwd=str(self.sherlock_path),
+                cwd=str(self.sherlock_path.parent),
                 capture_output=True,
                 text=True,
-                timeout=300
+                timeout=60
             )
             
             if result.returncode == 0:
@@ -541,7 +503,7 @@ class OSINTToolsService:
                         'source': 'url_check'
                     })
                     logger.info(f"Found profile: {platform} - {url}")
-                time.sleep(0.5)  # Rate limiting
+                time.sleep(0.1)  # Faster rate limiting
             except Exception as e:
                 logger.debug(f"Error checking {platform}: {e}")
                 continue
@@ -561,7 +523,7 @@ class OSINTToolsService:
             'status': 'success'
         }
 
-    def check_url_exists(self, url: str, timeout: int = 10) -> bool:
+    def check_url_exists(self, url: str, timeout: int = 3) -> bool:
         """Check if a URL exists and returns a valid response"""
         try:
             headers = {
@@ -588,7 +550,7 @@ class OSINTToolsService:
         """Check GitHub API for user information"""
         try:
             url = f'https://api.github.com/users/{username}'
-            response = requests.get(url, timeout=10)
+            response = requests.get(url, timeout=5)
             
             if response.status_code == 200:
                 data = response.json()
@@ -694,21 +656,21 @@ class OSINTToolsService:
             # Run Sherlock with proper output capture
             cmd = [
                 'python', 
-                str(self.sherlock_path / 'sherlock' / 'sherlock.py'),
+                str(self.sherlock_path),
                 username,
                 '--print-found',  # Only print found profiles
                 '--no-color',     # Remove color codes
-                '--timeout', '10'
+                '--timeout', '5'
             ]
             
             logger.info(f"Running Sherlock command: {' '.join(cmd)}")
             
             result = subprocess.run(
                 cmd,
-                cwd=str(self.sherlock_path),
+                cwd=str(self.sherlock_path.parent),
                 capture_output=True,
                 text=True,
-                timeout=300
+                timeout=60
             )
             
             if result.returncode == 0:
@@ -799,7 +761,7 @@ class OSINTToolsService:
                         'source': 'url_check'
                     })
                     logger.info(f"Found profile: {platform} - {url}")
-                time.sleep(0.5)  # Rate limiting
+                time.sleep(0.1)  # Faster rate limiting
             except Exception as e:
                 logger.debug(f"Error checking {platform}: {e}")
                 continue
@@ -819,7 +781,7 @@ class OSINTToolsService:
             'status': 'success'
         }
 
-    def check_url_exists(self, url: str, timeout: int = 10) -> bool:
+    def check_url_exists(self, url: str, timeout: int = 3) -> bool:
         """Check if a URL exists and returns a valid response"""
         try:
             headers = {
@@ -846,7 +808,7 @@ class OSINTToolsService:
         """Check GitHub API for user information"""
         try:
             url = f'https://api.github.com/users/{username}'
-            response = requests.get(url, timeout=10)
+            response = requests.get(url, timeout=5)
             
             if response.status_code == 200:
                 data = response.json()

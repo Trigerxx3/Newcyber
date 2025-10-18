@@ -8,27 +8,27 @@ import enum
 
 class ContentType(enum.Enum):
     """Enum for content types"""
-    TEXT = 'Text'
-    IMAGE = 'Image'
-    VIDEO = 'Video'
-    AUDIO = 'Audio'
-    DOCUMENT = 'Document'
-    LINK = 'Link'
+    TEXT = 'TEXT'
+    IMAGE = 'IMAGE'
+    VIDEO = 'VIDEO'
+    AUDIO = 'AUDIO'
+    DOCUMENT = 'DOCUMENT'
+    LINK = 'LINK'
     
 class ContentStatus(enum.Enum):
     """Enum for content status"""
-    PENDING = 'Pending'
-    ANALYZED = 'Analyzed'
-    REVIEWING = 'Reviewing'
-    APPROVED = 'Approved'
-    REJECTED = 'Rejected'
+    PENDING = 'PENDING'
+    ANALYZED = 'ANALYZED'
+    REVIEWING = 'REVIEWING'
+    APPROVED = 'APPROVED'
+    REJECTED = 'REJECTED'
 
 class RiskLevel(enum.Enum):
     """Enum for risk levels"""
-    LOW = 'Low'
-    MEDIUM = 'Medium'
-    HIGH = 'High'
-    CRITICAL = 'Critical'
+    LOW = 'LOW'
+    MEDIUM = 'MEDIUM'
+    HIGH = 'HIGH'
+    CRITICAL = 'CRITICAL'
 
 class Content(BaseModel):
     """Content model for analyzed data"""

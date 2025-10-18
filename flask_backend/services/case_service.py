@@ -231,10 +231,14 @@ class CaseService:
     
     def get_all_cases(self, status: str = None, priority: str = None, 
                      case_type: str = None, assigned_to_id: int = None,
-                     page: int = 1, per_page: int = 10) -> Tuple[bool, str, Dict]:
+                     page: int = 1, per_page: int = 10,
+                     current_user_id: int | None = None) -> Tuple[bool, str, Dict]:
         """Get all cases with optional filtering"""
         try:
+            # Start from cases; if a user is provided, scope to cases linked to that user
             query = Case.query
+            if current_user_id:
+                query = query.join(UserCaseLink).filter(UserCaseLink.user_id == current_user_id)
             
             if status:
                 try:

@@ -12,15 +12,21 @@ def create_app(config_name='development'):
     app.url_map.strict_slashes = False
     
     # Configure CORS with comprehensive settings
+    origins = [
+        'http://localhost:3000',
+        'http://127.0.0.1:3000', 
+        'http://localhost:9002',
+        'http://127.0.0.1:9002',
+        'http://localhost:9003',
+        'http://127.0.0.1:9003'
+    ]
+    
+    # Add production frontend URL when deployed
+    if os.getenv('FRONTEND_URL'):
+        origins.append(os.getenv('FRONTEND_URL'))
+    
     CORS(app, 
-         origins=[
-             'http://localhost:3000',
-             'http://127.0.0.1:3000', 
-             'http://localhost:9002',
-             'http://127.0.0.1:9002',
-             'http://localhost:9003',
-             'http://127.0.0.1:9003'
-         ],
+         origins=origins,
          allow_headers=[
              'Content-Type', 
              'Authorization', 
@@ -43,12 +49,35 @@ def create_app(config_name='development'):
         app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///local.db')
         app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
+    # Production database configuration
+    if os.getenv('FLASK_ENV') == 'production':
+        database_url = os.getenv('DATABASE_URL')
+        if database_url:
+            # Handle PostgreSQL URL format for Render
+            if database_url.startswith('postgres://'):
+                database_url = database_url.replace('postgres://', 'postgresql://', 1)
+            app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+    
     # Initialize extensions
     try:
         from extensions import init_extensions
         init_extensions(app)
     except Exception as e:
         print(f"⚠️  Warning: Could not initialize extensions: {e}")
+    
+    # Ensure critical auxiliary tables exist (safe for dev; no-op if already migrated)
+    try:
+        from extensions import db
+        from sqlalchemy import inspect
+        from models.active_case import ActiveCase
+        with app.app_context():
+            inspector = inspect(db.engine)
+            existing = set(inspector.get_table_names())
+            if 'active_cases' not in existing:
+                print('ℹ️  Creating missing table: active_cases')
+                ActiveCase.__table__.create(db.engine, checkfirst=True)
+    except Exception as e:
+        print(f"⚠️  Could not verify/create auxiliary tables: {e}")
     
     # Development bootstrap: ensure a default admin exists
     try:
@@ -116,6 +145,7 @@ def create_app(config_name='development'):
     safe_register('routes.dashboard', 'dashboard_bp', '/api/dashboard')
     safe_register('routes.users', 'users_bp', '/api/users')
     safe_register('routes.cases', 'cases_bp', '/api/cases')
+    safe_register('routes.reports', 'reports_bp', '/api/reports')
     safe_register('routes.admin', 'admin_bp', '/api/admin')
     safe_register('routes.scraping', 'scraping_bp', '/api/scraping')
     safe_register('routes.instagram', 'instagram_bp', '/api')
@@ -134,7 +164,9 @@ def create_app(config_name='development'):
                 'content': '/api/content',
                 'content-analysis': '/api/content-analysis/*',
                 'osint': '/api/osint',
-                'dashboard': '/api/dashboard'
+                'dashboard': '/api/dashboard',
+                'cases': '/api/cases',
+                'reports': '/api/reports'
             }
         })
     

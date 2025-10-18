@@ -53,3 +53,7 @@ structlog==23.1.0
 # spacy==3.7.2  # Install manually if needed: pip install spacy && python -m spacy download en_core_web_sm
 nltk==3.8.1
 textblob==0.17.1
+
+# PDF generation for reports
+reportlab==4.0.4
+weasyprint==60.2

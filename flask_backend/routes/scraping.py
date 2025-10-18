@@ -581,7 +581,7 @@ def scrape_instagram_profile():
         instagram_scraper = InstagramScraperService()
         
         # Scrape the profile
-        scrape_result = instagram_scraper.scrape_user_posts(username, max_posts)
+        scrape_result = instagram_scraper.scrape_profile(username, max_posts)
         
         # Store scraped data in database
         scraped_count = 0

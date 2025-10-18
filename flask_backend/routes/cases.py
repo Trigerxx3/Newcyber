@@ -5,6 +5,7 @@ from flask import Blueprint, request, jsonify
 from auth import require_auth, require_role
 from extensions import db
 from models.case import Case, CaseStatus
+from models.active_case import ActiveCase
 from models.user_case_link import UserCaseLink
 from models.user import User
 from models.source import Source
@@ -21,6 +22,8 @@ case_service = CaseService()
 def get_cases():
     """Get all cases"""
     try:
+        current_user = getattr(request, 'current_user', None)
+        current_user_id = current_user.id if current_user else None
         # Get query parameters
         status = request.args.get('status')
         priority = request.args.get('priority')
@@ -36,7 +39,8 @@ def get_cases():
             case_type=case_type,
             assigned_to_id=assigned_to_id,
             page=page,
-            per_page=per_page
+            per_page=per_page,
+            current_user_id=current_user_id
         )
         
         if not success:
@@ -105,6 +109,19 @@ def create_case():
         
         if not success:
             return jsonify({'status': 'error', 'message': message}), 400
+        
+        # Set this new case as the active case for the creator
+        try:
+            active = ActiveCase.query.filter_by(user_id=created_by_id).first()
+            if active:
+                active.case_id = case.id
+            else:
+                active = ActiveCase(user_id=created_by_id, case_id=case.id)
+                db.session.add(active)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            # Do not fail case creation if active-case setting fails
         
         return jsonify({
             'status': 'success',
@@ -317,6 +334,64 @@ def get_cases_by_user(user_id):
         }), 200
         
     except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@cases_bp.route('/active', methods=['GET'])
+@require_auth
+def get_active_case():
+    """Get the active case for the current user"""
+    try:
+        current_user = getattr(request, 'current_user', None)
+        if not current_user:
+            return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
+        active = ActiveCase.query.filter_by(user_id=current_user.id).first()
+        if not active:
+            return jsonify({'status': 'success', 'data': None}), 200
+        case = Case.query.get(active.case_id)
+        return jsonify({'status': 'success', 'data': case.to_dict() if case else None}), 200
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@cases_bp.route('/active', methods=['POST'])
+@require_auth
+def set_active_case():
+    """Set the active case for the current user"""
+    try:
+        current_user = getattr(request, 'current_user', None)
+        if not current_user:
+            return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
+        data = request.get_json() or {}
+        case_id = data.get('case_id')
+        if not case_id:
+            return jsonify({'status': 'error', 'message': 'case_id is required'}), 400
+        case = Case.query.get(case_id)
+        if not case:
+            return jsonify({'status': 'error', 'message': 'Case not found'}), 404
+        active = ActiveCase.query.filter_by(user_id=current_user.id).first()
+        if active:
+            active.case_id = case_id
+        else:
+            active = ActiveCase(user_id=current_user.id, case_id=case_id)
+            db.session.add(active)
+        db.session.commit()
+        return jsonify({'status': 'success', 'message': 'Active case set', 'data': case.to_dict()}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@cases_bp.route('/active', methods=['DELETE'])
+@require_auth
+def clear_active_case():
+    """Clear the active case for the current user"""
+    try:
+        current_user = getattr(request, 'current_user', None)
+        if not current_user:
+            return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
+        ActiveCase.query.filter_by(user_id=current_user.id).delete()
+        db.session.commit()
+        return jsonify({'status': 'success', 'message': 'Active case cleared'}), 200
+    except Exception as e:
+        db.session.rollback()
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @cases_bp.route('/statistics', methods=['GET'])

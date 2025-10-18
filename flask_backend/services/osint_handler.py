@@ -404,17 +404,14 @@ class OSINTHandler:
     def investigate_user(self, username: str, platform: str = None) -> Dict:
         """Investigate a user across multiple platforms"""
         try:
-            # Use the OSINT tools service
-            osint_tools = OSINTToolsService()
-            results = osint_tools.comprehensive_username_investigation(username, platform)
+            # Use production-ready service (auto-detects local vs production)
+            from .osint_tools_production import get_production_osint_service
             
-            # Format results properly with actual URLs
-            formatted_results = self._format_investigation_results(results, username)
+            production_service = get_production_osint_service()
+            result = production_service.investigate_user(username, platform)
             
-            return {
-                'status': 'success',
-                'data': formatted_results
-            }
+            return result
+            
         except Exception as e:
             logger.error(f"User investigation failed: {str(e)}")
             return {

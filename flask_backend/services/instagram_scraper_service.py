@@ -15,14 +15,40 @@ class InstagramScraperService:
         self.scraper = get_instagram_scraper()
         self.is_using_real_api = hasattr(self.scraper, 'is_authenticated') and self.scraper.is_authenticated
         
+        # Fallback to instaloader for real data without authentication
+        if not self.is_using_real_api:
+            try:
+                from .instagram_scraper_db import get_instagram_scraper_db
+                self.db_scraper = get_instagram_scraper_db()
+                self.has_instaloader = True
+            except Exception:
+                self.db_scraper = None
+                self.has_instaloader = False
+        else:
+            self.db_scraper = None
+            self.has_instaloader = False
+        
     def _add_status_info(self, result: Dict[str, Any]) -> Dict[str, Any]:
         """Add status information to the result"""
+        if self.is_using_real_api:
+            data_type = 'real'
+            message = 'Connected to Instagram API with authentication'
+            source = 'Instagram API (Authenticated)'
+        elif self.has_instaloader and self.db_scraper and 'error' not in result:
+            data_type = 'real'
+            message = 'Using real Instagram data via instaloader (no authentication required)'
+            source = 'Instaloader (Public Data)'
+        else:
+            data_type = 'mock'
+            message = 'Using mock data - Instagram credentials not configured'
+            source = 'Mock Generator'
+            
         result['scraping_status'] = {
             'using_real_api': self.is_using_real_api,
-            'data_type': 'real' if self.is_using_real_api else 'mock',
-            'message': 'Connected to Instagram API' if self.is_using_real_api else 'Using mock data - Instagram credentials not configured',
+            'data_type': data_type,
+            'message': message,
             'timestamp': result.get('scraped_at', ''),
-            'source': 'Instagram API' if self.is_using_real_api else 'Mock Generator'
+            'source': source
         }
         return result
     
@@ -38,8 +64,40 @@ class InstagramScraperService:
             Dictionary containing scraped posts and metadata
         """
         try:
-            result = self.scraper.scrape_user_posts(username, max_posts=max_posts)
-            return self._add_status_info(result)
+            # Try authenticated API first
+            if self.is_using_real_api:
+                result = self.scraper.scrape_user_posts(username, max_posts=max_posts)
+                return self._add_status_info(result)
+            
+            # Fallback to instaloader for real data without authentication
+            elif self.has_instaloader and self.db_scraper:
+                print(f"🔍 Using instaloader to scrape real data for @{username}")
+                result = self.db_scraper.scrape_user_posts(username, max_posts)
+                
+                # Convert to expected format
+                if 'error' not in result:
+                    formatted_result = {
+                        'username': username,
+                        'scraped_count': result.get('scraped_count', 0),
+                        'posts': result.get('posts', []),
+                        'user_info': {
+                            'follower_count': 'N/A',
+                            'following_count': 'N/A',
+                            'media_count': result.get('scraped_count', 0),
+                            'is_verified': False
+                        },
+                        'scraped_at': result.get('scraped_at', ''),
+                        'max_posts_requested': max_posts
+                    }
+                    return self._add_status_info(formatted_result)
+                else:
+                    return self._add_status_info(result)
+            
+            # Final fallback to mock data
+            else:
+                result = self.scraper.scrape_user_posts(username, max_posts=max_posts)
+                return self._add_status_info(result)
+                
         except Exception as e:
             error_result = {
                 'error': f'Failed to scrape profile {username}: {str(e)}',
