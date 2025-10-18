@@ -15,3 +15,19 @@ lxml==4.9.3
 selenium==4.15.0
 webdriver-manager==4.0.1
 gunicorn==21.2.0
+
+# Instagram Scraping (compatible versions)
+instagrapi==1.16.22
+instaloader==4.10.3
+
+# Telegram Scraping (compatible versions)
+telethon==1.28.5
+python-telegram-bot==20.3
+
+# Content Analysis (compatible versions)
+spacy==3.6.1
+nltk==3.8.1
+textblob==0.17.1
+
+# OSINT Tools (compatible versions)
+sherlock-project==0.14.1
