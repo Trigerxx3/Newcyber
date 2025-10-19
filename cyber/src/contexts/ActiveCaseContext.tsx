@@ -21,14 +21,32 @@ export function ActiveCaseProvider({ children }: { children: React.ReactNode }) 
 
   const refreshActiveCase = async () => {
     try {
+      // Check if user is authenticated before making the request
+      const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
+      if (!token) {
+        console.log('🔐 ActiveCase: No authentication token, skipping active case fetch')
+        setActiveCaseState(null)
+        return
+      }
+
       const res = await apiClient.getActiveCase()
       const data = (res as any)?.data
       setActiveCaseState(data || null)
       if (typeof window !== 'undefined') {
         localStorage.setItem('active_case', data ? JSON.stringify(data) : '')
       }
-    } catch (e) {
-      // ignore
+    } catch (e: any) {
+      // Handle authentication errors properly
+      if (e?.status === 401) {
+        console.log('🔐 ActiveCase: Authentication error (401), clearing active case')
+        setActiveCaseState(null)
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('active_case')
+        }
+      } else {
+        console.log('🔐 ActiveCase: Error fetching active case:', e?.message || e)
+        // For other errors, just ignore silently as before
+      }
     }
   }
 
