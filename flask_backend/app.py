@@ -14,11 +14,14 @@ def create_app(config_name='development'):
     # Configure CORS with comprehensive settings
     origins = [
         'http://localhost:3000',
-        'http://127.0.0.1:3000', 
+        'http://127.0.0.1:3000',
         'http://localhost:9002',
         'http://127.0.0.1:9002',
         'http://localhost:9003',
-        'http://127.0.0.1:9003'
+        'http://127.0.0.1:9003',
+        # Allow all Vercel domains
+        r'https://.*\.vercel\.app',
+        r'https://.*\.vercel\.com'
     ]
     
     # Add production frontend URL when deployed
