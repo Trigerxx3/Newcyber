@@ -43,6 +43,15 @@ def create_app(config_name='development'):
          send_wildcard=False,
          automatic_options=True)
     
+    # Add a simple health check endpoint for debugging
+    @app.route('/api/health')
+    def health_check():
+        return jsonify({
+            'status': 'healthy',
+            'message': 'Backend is running',
+            'cors_origins': origins
+        })
+    
     # Load configuration
     try:
         app.config.from_object(f'config.{config_name.title()}Config')
