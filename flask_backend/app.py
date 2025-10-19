@@ -103,7 +103,8 @@ def create_app(config_name='development'):
         return jsonify({
             'status': 'healthy',
             'message': 'Backend is running',
-            'cors_origins': origins,
+            'cors_origins': explicit_origins,
+            'wildcard_patterns': wildcard_patterns,
             'flask_env': os.getenv('FLASK_ENV', 'development')
         })
     
