@@ -24,9 +24,9 @@ selenium==4.15.2
 webdriver-manager==4.0.1
 
 # Data processing and analysis
-pandas==2.1.1
-numpy==1.24.3
-python-dateutil==2.8.2
+pandas>=2.2.0
+numpy>=1.26.0
+python-dateutil>=2.8.2
 
 # Web scraping utilities
 beautifulsoup4==4.12.2
@@ -34,8 +34,7 @@ lxml==4.9.3
 fake-useragent==1.4.0
 
 # Async support
-aiohttp==3.8.6
-asyncio==3.4.3
+aiohttp>=3.9.0
 
 # Job scheduling
 APScheduler==3.10.4
@@ -43,8 +42,8 @@ celery==5.3.2
 redis==5.0.0
 
 # Image and media processing
-Pillow==10.0.1
-moviepy==1.0.3
+Pillow>=10.1.0
+moviepy>=1.0.3
 
 # Logging and monitoring
 structlog==23.1.0
