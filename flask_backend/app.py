@@ -19,7 +19,10 @@ def create_app(config_name='development'):
         'http://127.0.0.1:9002',
         'http://localhost:9003',
         'http://127.0.0.1:9003',
-        # Allow all Vercel domains
+        # Specific Vercel domains
+        'https://cyber-605eu5nyd-athul-s-projects.vercel.app',
+        'https://cyber-kohl-two.vercel.app',
+        # Allow all Vercel domains with regex
         r'https://.*\.vercel\.app',
         r'https://.*\.vercel\.com'
     ]
@@ -28,20 +31,45 @@ def create_app(config_name='development'):
     if os.getenv('FRONTEND_URL'):
         origins.append(os.getenv('FRONTEND_URL'))
     
-    CORS(app, 
-         origins=origins,
-         allow_headers=[
-             'Content-Type', 
-             'Authorization', 
-             'X-Requested-With',
-             'Accept',
-             'Origin',
-             'X-CSRF-Token'
-         ],
-         methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-         supports_credentials=True,
-         send_wildcard=False,
-         automatic_options=True)
+    # More permissive CORS for development and testing
+    if os.getenv('FLASK_ENV') != 'production':
+        CORS(app, 
+             origins="*",  # Allow all origins in development
+             allow_headers=[
+                 'Content-Type', 
+                 'Authorization', 
+                 'X-Requested-With',
+                 'Accept',
+                 'Origin',
+                 'X-CSRF-Token'
+             ],
+             methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+             supports_credentials=True)
+    else:
+        CORS(app, 
+             origins=origins,
+             allow_headers=[
+                 'Content-Type', 
+                 'Authorization', 
+                 'X-Requested-With',
+                 'Accept',
+                 'Origin',
+                 'X-CSRF-Token'
+             ],
+             methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+             supports_credentials=True,
+             send_wildcard=False,
+             automatic_options=True)
+    
+    # Manual CORS headers as backup
+    @app.after_request
+    def after_request(response):
+        # Add CORS headers manually as backup
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept,Origin,X-CSRF-Token')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
     
     # Add a simple health check endpoint for debugging
     @app.route('/api/health')
@@ -49,7 +77,8 @@ def create_app(config_name='development'):
         return jsonify({
             'status': 'healthy',
             'message': 'Backend is running',
-            'cors_origins': origins
+            'cors_origins': origins,
+            'flask_env': os.getenv('FLASK_ENV', 'development')
         })
     
     # Load configuration
