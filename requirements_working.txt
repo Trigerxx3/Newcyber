@@ -1,0 +1,33 @@
+Flask==2.3.3
+Flask-SQLAlchemy==3.0.5
+Flask-JWT-Extended==4.5.3
+Flask-CORS==4.0.0
+Flask-Migrate==4.0.5
+Werkzeug==2.3.7
+psycopg2-binary>=2.9.9
+requests==2.31.0
+python-dotenv==1.0.0
+bcrypt==4.0.1
+email-validator==2.0.0
+Pillow>=10.4.0
+beautifulsoup4==4.12.2
+lxml>=5.0.0
+selenium==4.15.0
+webdriver-manager==4.0.1
+gunicorn==21.2.0
+
+# Instagram Scraping
+instagrapi>=2.0.0
+instaloader>=4.10.3
+
+# Telegram Scraping
+telethon>=1.28.5
+python-telegram-bot>=20.3
+
+# Content Analysis
+spacy>=3.6.1
+nltk==3.8.1
+textblob==0.17.1
+
+# OSINT Tools
+sherlock-project>=0.14.1

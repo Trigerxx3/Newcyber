@@ -1,0 +1,27 @@
+# These are the packages that commonly cause wheel build failures
+# Test these one by one to identify the problematic one
+
+# Image processing - often causes issues
+Pillow==10.0.0
+
+# Web scraping - can have compilation issues
+beautifulsoup4==4.12.2
+lxml==4.9.3
+selenium==4.15.0
+webdriver-manager==4.0.1
+
+# Instagram scraping - heavy dependencies
+instagrapi==1.16.22
+instaloader==4.10.3
+
+# Telegram scraping - complex dependencies
+telethon==1.28.5
+python-telegram-bot==20.3
+
+# Content Analysis - requires system dependencies
+spacy==3.6.1
+nltk==3.8.1
+textblob==0.17.1
+
+# OSINT Tools - complex build requirements
+sherlock-project==0.14.1
