@@ -141,7 +141,7 @@ export default function ReportsPage() {
   const loadCases = async () => {
     try {
       setLoading(true)
-      const response = await apiClient.getCasesForReports()
+      const response = await apiClient.getCasesForReports() as any
       if (response.data?.data?.cases) {
         setCases(response.data.data.cases)
       }
@@ -250,7 +250,7 @@ export default function ReportsPage() {
   const previewReport = async (caseId: number) => {
     try {
       setPreviewLoading(true)
-      const response = await apiClient.previewCaseReport(caseId)
+      const response = await apiClient.previewCaseReport(caseId) as any
       if (response.data?.data) {
         setReportPreview(response.data.data)
         setPreviewDialog({ open: true, caseId })

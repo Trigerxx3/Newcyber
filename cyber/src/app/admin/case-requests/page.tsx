@@ -51,7 +51,7 @@ import {
   AlertTriangle,
   Filter
 } from 'lucide-react'
-import { toast } from '@/hooks/use-toast'
+import { useToast } from '@/hooks/use-toast'
 import apiClient from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -114,7 +114,7 @@ export default function CaseRequestManagement() {
       setLoading(true)
       setError(null)
       
-      const response = await apiClient.getCaseRequests()
+      const response = await apiClient.getCaseRequests() as any
       
       if (response.status === 'success') {
         setRequests(response.data || [])
@@ -150,7 +150,7 @@ export default function CaseRequestManagement() {
     if (!selectedRequest) return
 
     try {
-      const response = await apiClient.approveCaseRequest(selectedRequest.id, reviewNotes)
+      const response = await apiClient.approveCaseRequest(selectedRequest.id, reviewNotes) as any
       
       if (response.status === 'success') {
         toast({
@@ -181,7 +181,7 @@ export default function CaseRequestManagement() {
     if (!selectedRequest) return
 
     try {
-      const response = await apiClient.rejectCaseRequest(selectedRequest.id, reviewNotes)
+      const response = await apiClient.rejectCaseRequest(selectedRequest.id, reviewNotes) as any
       
       if (response.status === 'success') {
         toast({

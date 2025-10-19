@@ -99,10 +99,10 @@ export default function AdminDashboard() {
       try {
         // Fetch real data from the backend
         const [statsResponse, activityResponse, apiStatusResponse] = await Promise.all([
-          apiClient.request('/api/admin/stats'),
-          apiClient.request('/api/admin/activity'),
-          apiClient.request('/api/admin/api-status')
-        ])
+          apiClient.getAdminStats(),
+          apiClient.getAdminActivity(),
+          apiClient.getApiStatus()
+        ]) as any[]
         
         setStats(statsResponse)
         setActivity(activityResponse)

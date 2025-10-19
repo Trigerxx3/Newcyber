@@ -7,7 +7,7 @@ import * as z from "zod";
 import { AtSign, Instagram, Link as LinkIcon, Loader2, MessageSquare, Send, Users } from "lucide-react";
 
 import { identifySuspectedUser, IdentifySuspectedUserOutput } from "@/ai/flows/identify-suspected-user";
-import { saveSuspectedUserToFirestore } from "@/app/actions";
+import { saveSuspectedUserData } from "@/app/actions";
 import { useToast } from "@/hooks/use-toast";
 
 import { Button } from "@/components/ui/button";
@@ -51,7 +51,7 @@ export function UserInvestigation() {
       });
       setUserResult(result);
       
-      const saveResult = await saveSuspectedUserToFirestore({
+      const saveResult = await saveSuspectedUserData({
         username: values.username,
         platform: values.platform,
         analysisResult: result,

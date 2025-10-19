@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { getDashboardData, seedDatabase, isFirebaseConfigured } from '@/app/actions';
+import { getDashboardData, seedDatabase, isDatabaseConfigured } from '@/app/actions';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -76,7 +76,7 @@ export function LiveDashboard() {
     const init = async () => {
         setLoading(true);
         try {
-            const isConfigured = await isFirebaseConfigured();
+            const isConfigured = await isDatabaseConfigured();
             setFirebaseConfigured(isConfigured);
             
             if (isConfigured) {

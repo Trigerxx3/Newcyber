@@ -24,7 +24,7 @@ export default function UnauthorizedPage() {
   }
 
   const handleGoHome = () => {
-    if (systemUser?.role === 'Admin' || systemUser?.role === 'ADMIN') {
+    if (systemUser?.role === 'Admin') {
       router.push('/admin')
     } else {
       router.push('/dashboard')
@@ -48,7 +48,7 @@ export default function UnauthorizedPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
-            <Logo className="h-12 w-12" />
+            <Logo />
           </div>
           <div className="flex justify-center mb-4">
             <AlertTriangle className="h-16 w-16 text-red-500" />

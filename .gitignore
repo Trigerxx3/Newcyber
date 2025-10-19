@@ -71,3 +71,4 @@ osint_tools/spiderfoot/.git/
 *.dmg
 *.pkg
 flask_backend/.env_clean
+.vercel

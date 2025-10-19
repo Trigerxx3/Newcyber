@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { apiService, ApiResponse } from '@/lib/api';
+import apiClient from '@/lib/api';
 
 interface UseApiState<T> {
   data: T | null;
@@ -13,7 +13,7 @@ interface UseApiReturn<T> extends UseApiState<T> {
 }
 
 export function useApi<T = any>(
-  apiMethod: (...args: any[]) => Promise<ApiResponse<T>>,
+  apiMethod: (...args: any[]) => Promise<any>,
   immediate = false
 ): UseApiReturn<T> {
   const [state, setState] = useState<UseApiState<T>>({
@@ -61,57 +61,57 @@ export function useApi<T = any>(
 
 // Specific hooks for different API endpoints
 export function useHealthCheck() {
-  return useApi(apiService.healthCheck);
+  return useApi(apiClient.healthCheck);
 }
 
 export function useSources(page = 1, perPage = 10) {
-  return useApi(() => apiService.getSources(page, perPage));
+  return useApi(() => apiClient.getSources({ page, perPage }));
 }
 
 export function useSource(id: number) {
-  return useApi(() => apiService.getSource(id));
+  return useApi(() => apiClient.getSources({ id }));
 }
 
 export function useContent(page = 1, perPage = 10, sourceId?: number, riskLevel?: string) {
-  return useApi(() => apiService.getContent(page, perPage, sourceId, riskLevel));
+  return useApi(() => apiClient.getContent({ page, perPage, sourceId, riskLevel }));
 }
 
 export function useContentById(id: number) {
-  return useApi(() => apiService.getContentById(id));
+  return useApi(() => apiClient.getContent({ id }));
 }
 
 export function useOSINTInfo() {
-  return useApi(apiService.getOSINTInfo);
+  return useApi(apiClient.getOSINTInfo);
 }
 
 export function useOSINTResults(page = 1, perPage = 10) {
-  return useApi(() => apiService.getOSINTResults(page, perPage));
+  return useApi(() => apiClient.getOSINTInfo());
 }
 
 export function useOSINTResult(id: number) {
-  return useApi(() => apiService.getOSINTResult(id));
+  return useApi(() => apiClient.getOSINTInfo());
 }
 
 export function useDashboardInfo() {
-  return useApi(apiService.getDashboardInfo);
+  return useApi(apiClient.getDashboardInfo);
 }
 
 export function useDashboardStats(days = 30) {
-  return useApi(() => apiService.getDashboardStats(days));
+  return useApi(() => apiClient.getDashboardInfo());
 }
 
 export function useRecentContent(limit = 10) {
-  return useApi(() => apiService.getRecentContent(limit));
+  return useApi(() => apiClient.getDashboardInfo());
 }
 
 export function useHighRiskContent(limit = 10) {
-  return useApi(() => apiService.getHighRiskContent(limit));
+  return useApi(() => apiClient.getDashboardInfo());
 }
 
 export function useTrends(days = 30) {
-  return useApi(() => apiService.getTrends(days));
+  return useApi(() => apiClient.getDashboardInfo());
 }
 
 export function useAlerts() {
-  return useApi(apiService.getAlerts);
+  return useApi(() => apiClient.getDashboardInfo());
 } 

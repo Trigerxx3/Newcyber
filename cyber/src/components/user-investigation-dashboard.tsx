@@ -50,7 +50,7 @@ export function UserInvestigationDashboard() {
   useEffect(() => {
     const checkBackendConnection = async () => {
       try {
-        const data = await apiClient.healthCheck();
+        const data = await apiClient.healthCheck() as any;
         setBackendStatus(data?.database_connected ? 'connected' : 'error');
         if (data?.database_connected) {
           checkToolStatus();
@@ -67,7 +67,7 @@ export function UserInvestigationDashboard() {
   const checkBackendConnection = async () => {
     try {
       setBackendStatus('checking');
-      const data = await apiClient.healthCheck();
+      const data = await apiClient.healthCheck() as any;
       setBackendStatus(data?.database_connected ? 'connected' : 'error');
       if (data?.database_connected) {
         checkToolStatus();
@@ -80,7 +80,7 @@ export function UserInvestigationDashboard() {
 
   const checkToolStatus = async () => {
     try {
-      const data = await apiClient.getOsintToolsStatus();
+      const data = await apiClient.getOsintToolsStatus() as any;
       if (data?.status === 'success') {
         setToolStatus(data.tools);
       }
@@ -101,8 +101,8 @@ export function UserInvestigationDashboard() {
 
     try {
       console.log(`🔍 Starting investigation for user: ${username.trim()} on ${platform}`);
-      const data = await apiClient.investigateUser(username.trim(), platform);
-      
+      const data = await apiClient.investigateUser(username.trim(), platform) as any;
+
       if (data?.status === 'success') {
         setResults(data.data);
         console.log('✅ Investigation completed successfully');

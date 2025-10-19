@@ -35,13 +35,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <SidebarFooter>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton href="/dashboard/settings" tooltip="Settings">
-                  <Settings />
-                  Settings
+                <SidebarMenuButton asChild>
+                  <Link href="/dashboard/settings">
+                    <Settings />
+                    Settings
+                  </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Log Out">
+                <SidebarMenuButton asChild>
                   <button onClick={handleSignOut} className="inline-flex items-center gap-2">
                     <LogOut />
                     Log Out

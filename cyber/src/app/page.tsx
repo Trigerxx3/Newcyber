@@ -10,7 +10,7 @@ export default function HomePage() {
   
   // Determine dashboard URL based on user role
   const getDashboardUrl = () => {
-    if (systemUser?.role === 'Admin' || systemUser?.role === 'ADMIN') {
+    if (systemUser?.role === 'Admin') {
       return '/admin'
     }
     return '/dashboard'

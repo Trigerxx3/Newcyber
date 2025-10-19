@@ -46,7 +46,7 @@ export default function CreateCaseDialog({ open, onOpenChange, onCreateCase }: C
   const checkCaseCreationPermission = async () => {
     try {
       setCheckingPermission(true)
-      const response = await apiClient.canCreateCase()
+      const response = await apiClient.canCreateCase() as any
       
       if (response.status === 'success') {
         setCanCreate(response.can_create)
@@ -70,7 +70,7 @@ export default function CreateCaseDialog({ open, onOpenChange, onCreateCase }: C
     setLoading(true)
 
     try {
-      const response = await onCreateCase(formData)
+      const response = await onCreateCase(formData) as any
       
       // Handle case request submission
       if (response && response.requires_approval) {

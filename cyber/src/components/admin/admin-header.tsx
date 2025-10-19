@@ -84,10 +84,10 @@ export function AdminHeader() {
               <User className="h-4 w-4 text-gray-400" />
               <div className="text-right">
                 <p className="text-sm font-medium text-white">
-                  {systemUser?.display_name || systemUser?.username || 'Admin'}
+                  {systemUser?.username || 'Admin'}
                 </p>
                 <p className="text-xs text-gray-400">
-                  {systemUser?.email || 'admin@cyber.com'} • {systemUser?.auth_method || 'password'}
+                  {systemUser?.email || 'admin@cyber.com'} • password
                 </p>
               </div>
             </div>

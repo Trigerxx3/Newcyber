@@ -56,7 +56,7 @@ export default function CaseRequestStatus() {
       setLoading(true)
       setError(null)
       
-      const response = await apiClient.getCaseRequests()
+      const response = await apiClient.getCaseRequests() as any
       
       if (response.status === 'success') {
         setRequests(response.data || [])
