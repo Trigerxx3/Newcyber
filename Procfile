@@ -1,1 +1,1 @@
-web: cd flask_backend && gunicorn app:app --bind 0.0.0.0:$PORT
+web: cd flask_backend && python run.py
