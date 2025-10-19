@@ -4,6 +4,7 @@ Flask app using SQLAlchemy with PostgreSQL/SQLite
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import os
+import fnmatch
 
 def create_app(config_name='development'):
     app = Flask(__name__)
@@ -12,32 +13,50 @@ def create_app(config_name='development'):
     app.url_map.strict_slashes = False
     
     # Configure CORS with comprehensive settings
-    origins = [
+    explicit_origins = [
         'http://localhost:3000',
         'http://127.0.0.1:3000',
         'http://localhost:9002',
         'http://127.0.0.1:9002',
         'http://localhost:9003',
         'http://127.0.0.1:9003',
-        # Specific Vercel domains
+        # Known Vercel deployments
         'https://cyber-605eu5nyd-athul-s-projects.vercel.app',
         'https://cyber-kohl-two.vercel.app',
-        # Allow all Vercel domains with regex
-        r'https://.*\.vercel\.app',
-        r'https://.*\.vercel\.com'
+        'https://cyber-euiexr8oc-athul-s-projects.vercel.app'
     ]
-    
-    # Add production frontend URL when deployed
+
+    # Wildcard patterns allowed (evaluated via fnmatch)
+    wildcard_patterns = [
+        'https://*.vercel.app',
+        'https://*.vercel.com'
+    ]
+
+    # Add production frontend URLs from env (comma-separated)
     if os.getenv('FRONTEND_URL'):
-        origins.append(os.getenv('FRONTEND_URL'))
-    
-    # More permissive CORS for development and testing
+        explicit_origins.append(os.getenv('FRONTEND_URL').strip())
+    if os.getenv('FRONTEND_URLS'):
+        for o in os.getenv('FRONTEND_URLS').split(','):
+            if o.strip():
+                explicit_origins.append(o.strip())
+
+    def is_allowed_origin(origin: str) -> bool:
+        if not origin:
+            return False
+        if origin in explicit_origins:
+            return True
+        for pattern in wildcard_patterns:
+            if fnmatch.fnmatch(origin, pattern):
+                return True
+        return False
+
+    # CORS setup
     if os.getenv('FLASK_ENV') != 'production':
-        CORS(app, 
-             origins="*",  # Allow all origins in development
+        CORS(app,
+             origins="*",
              allow_headers=[
-                 'Content-Type', 
-                 'Authorization', 
+                 'Content-Type',
+                 'Authorization',
                  'X-Requested-With',
                  'Accept',
                  'Origin',
@@ -46,11 +65,12 @@ def create_app(config_name='development'):
              methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
              supports_credentials=True)
     else:
-        CORS(app, 
-             origins=origins,
+        # In production, allow all but rely on after_request to echo allowed Origin
+        CORS(app,
+             resources={r"/api/*": {"origins": "*"}, r"/health": {"origins": "*"}},
              allow_headers=[
-                 'Content-Type', 
-                 'Authorization', 
+                 'Content-Type',
+                 'Authorization',
                  'X-Requested-With',
                  'Accept',
                  'Origin',
@@ -58,17 +78,23 @@ def create_app(config_name='development'):
              ],
              methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
              supports_credentials=True,
-             send_wildcard=False,
+             send_wildcard=True,
              automatic_options=True)
     
-    # Manual CORS headers as backup
+    # Manual CORS headers as backup (and to ensure correct Origin echoing)
     @app.after_request
     def after_request(response):
-        # Add CORS headers manually as backup
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept,Origin,X-CSRF-Token')
-        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
-        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        origin = request.headers.get('Origin')
+        if is_allowed_origin(origin):
+            response.headers['Access-Control-Allow-Origin'] = origin
+            response.headers['Vary'] = 'Origin'
+        else:
+            # Fallback for non-browser or dev tools
+            response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With,Accept,Origin,X-CSRF-Token'
+        response.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,OPTIONS,PATCH'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Max-Age'] = '86400'
         return response
     
     # Add a simple health check endpoint for debugging
@@ -145,10 +171,16 @@ def create_app(config_name='development'):
     def handle_preflight():
         if request.method == "OPTIONS":
             response = jsonify({})
-            response.headers.add("Access-Control-Allow-Origin", request.headers.get('Origin', '*'))
-            response.headers.add('Access-Control-Allow-Headers', "Content-Type,Authorization,X-Requested-With,Accept,Origin,X-CSRF-Token")
-            response.headers.add('Access-Control-Allow-Methods', "GET,POST,PUT,DELETE,OPTIONS,PATCH")
-            response.headers.add('Access-Control-Allow-Credentials', 'true')
+            origin = request.headers.get('Origin')
+            if is_allowed_origin(origin):
+                response.headers['Access-Control-Allow-Origin'] = origin
+                response.headers['Vary'] = 'Origin'
+            else:
+                response.headers['Access-Control-Allow-Origin'] = '*'
+            response.headers['Access-Control-Allow-Headers'] = "Content-Type,Authorization,X-Requested-With,Accept,Origin,X-CSRF-Token"
+            response.headers['Access-Control-Allow-Methods'] = "GET,POST,PUT,DELETE,OPTIONS,PATCH"
+            response.headers['Access-Control-Allow-Credentials'] = 'true'
+            response.headers['Access-Control-Max-Age'] = '86400'
             return response
     
     # Register blueprints
