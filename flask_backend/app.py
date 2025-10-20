@@ -65,21 +65,8 @@ def create_app(config_name='development'):
              methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
              supports_credentials=True)
     else:
-        # In production, allow all but rely on after_request to echo allowed Origin
-        CORS(app,
-             resources={r"/api/*": {"origins": "*"}, r"/health": {"origins": "*"}},
-             allow_headers=[
-                 'Content-Type',
-                 'Authorization',
-                 'X-Requested-With',
-                 'Accept',
-                 'Origin',
-                 'X-CSRF-Token'
-             ],
-             methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-             supports_credentials=True,
-             send_wildcard=True,
-             automatic_options=True)
+        # In production, don't use CORS extension - rely on after_request headers
+        pass
     
     # Manual CORS headers as backup (and to ensure correct Origin echoing)
     @app.after_request

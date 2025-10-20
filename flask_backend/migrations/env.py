@@ -18,6 +18,9 @@ from models.osint_result import OSINTResult
 from models.case import Case
 from models.user_case_link import UserCaseLink
 from models.osint_identifier_link import OSINTIdentifierLink
+from models.active_case import ActiveCase
+from models.case_request import CaseRequest
+from models.case_content_link import CaseContentLink
 
 # this is the Alembic Config object
 config = context.config
