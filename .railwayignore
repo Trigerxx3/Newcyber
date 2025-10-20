@@ -1,0 +1,3 @@
+# Ignore files that shouldn't trigger Railway build detection
+flask_backend/requirements.txt
+

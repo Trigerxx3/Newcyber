@@ -1,0 +1,9 @@
+[build]
+builder = "nixpacks"
+buildCommand = "echo 'Dependencies already installed via requirements.txt'"
+
+[deploy]
+startCommand = "cd flask_backend && python run.py"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10
+

@@ -2,10 +2,8 @@
 nixPkgs = ["postgresql"]
 
 [phases.install]
-cmds = []
 
 [phases.build]
-cmds = []
 
 [start]
 cmd = "cd flask_backend && python run.py"
