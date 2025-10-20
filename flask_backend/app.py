@@ -98,6 +98,19 @@ def create_app(config_name='development'):
         return response
     
     # Add a simple health check endpoint for debugging
+    @app.route('/')
+    def root():
+        return jsonify({
+            'status': 'running',
+            'message': 'Narcotics Intelligence Platform API',
+            'version': '1.0',
+            'endpoints': {
+                'health': '/api/health',
+                'auth': '/api/auth',
+                'cases': '/api/cases'
+            }
+        })
+    
     @app.route('/api/health')
     def health_check():
         return jsonify({
