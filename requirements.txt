@@ -1,0 +1,5 @@
+# This file exists only for Railway build compatibility
+# All actual dependencies are in flask_backend/requirements.txt
+# Railway will install this first, then our nixpacks.toml will handle the rest
+-r flask_backend/requirements.txt
+
