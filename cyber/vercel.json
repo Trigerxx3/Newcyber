@@ -1,6 +1,6 @@
 {
   "env": {
-    "NEXT_PUBLIC_API_URL": "https://newcyber-production.up.railway.app"
+    "NEXT_PUBLIC_API_URL": "https://narcointel.onrender.com"
   },
   "buildCommand": "npm run build",
   "framework": "nextjs"
