@@ -1,14 +1,6 @@
-[variables]
-PYTHON_VERSION = "3.12"
-
 [phases.setup]
-nixPkgs = ["python312", "postgresql"]
-aptPkgs = ["python3.12", "python3.12-dev"]
-
-[phases.install]
-
-[phases.build]
+nixPkgs = ["postgresql"]
 
 [start]
-cmd = "cd flask_backend && python3.12 run.py"
+cmd = "cd flask_backend && python run.py"
 
