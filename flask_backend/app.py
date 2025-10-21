@@ -131,7 +131,7 @@ def create_app(config_name='development'):
         from extensions import init_extensions
         init_extensions(app)
     except Exception as e:
-        print(f"⚠️  Warning: Could not initialize extensions: {e}")
+        print(f"[WARNING] Could not initialize extensions: {e}")
     
     # Ensure critical auxiliary tables exist (safe for dev; no-op if already migrated)
     try:
@@ -142,10 +142,10 @@ def create_app(config_name='development'):
             inspector = inspect(db.engine)
             existing = set(inspector.get_table_names())
             if 'active_cases' not in existing:
-                print('ℹ️  Creating missing table: active_cases')
+                print('[INFO] Creating missing table: active_cases')
                 ActiveCase.__table__.create(db.engine, checkfirst=True)
     except Exception as e:
-        print(f"⚠️  Could not verify/create auxiliary tables: {e}")
+        print(f"[WARNING] Could not verify/create auxiliary tables: {e}")
     
     # Development bootstrap: ensure a default admin exists
     try:
@@ -165,7 +165,7 @@ def create_app(config_name='development'):
                     # Reset password on each boot in dev for predictable creds
                     admin.set_password('admin123456')
     except Exception as e:
-        print(f"⚠️  Bootstrap admin failed: {e}")
+        print(f"[WARNING] Bootstrap admin failed: {e}")
     
     # Add global OPTIONS handler for CORS preflight requests
     @app.before_request
@@ -188,9 +188,9 @@ def create_app(config_name='development'):
     try:
         from routes.health import health_bp
         app.register_blueprint(health_bp)
-        print("✅ Health routes registered")
+        print("[OK] Health routes registered")
     except ImportError as e:
-        print(f"⚠️  Warning: Could not import health routes: {e}")
+        print(f"[WARNING] Could not import health routes: {e}")
         # Create a simple health endpoint as fallback
         @app.route('/health')
         @app.route('/api/health')
@@ -207,9 +207,9 @@ def create_app(config_name='development'):
             module = __import__(import_path, fromlist=[var_name])
             bp = getattr(module, var_name)
             app.register_blueprint(bp, url_prefix=url_prefix)
-            print(f"✅ Registered {import_path} at {url_prefix}")
+            print(f"[OK] Registered {import_path} at {url_prefix}")
         except Exception as e:
-            print(f"⚠️  Warning: Failed to register {import_path}: {e}")
+            print(f"[WARNING] Failed to register {import_path}: {e}")
 
     safe_register('routes.auth', 'auth_bp', '/api/auth')
     safe_register('routes.sources', 'sources_bp', '/api/sources')
@@ -223,6 +223,14 @@ def create_app(config_name='development'):
     safe_register('routes.admin', 'admin_bp', '/api/admin')
     safe_register('routes.scraping', 'scraping_bp', '/api/scraping')
     safe_register('routes.instagram', 'instagram_bp', '/api')
+    
+    # Case activities routes (blueprint already has /api/cases prefix)
+    try:
+        from routes.case_activities import bp as case_activities_bp
+        app.register_blueprint(case_activities_bp)
+        print(f"[OK] Registered case_activities routes")
+    except Exception as e:
+        print(f"[WARNING] Failed to register case_activities: {e}")
     
     # Add a simple API root endpoint
     @app.route('/api')

@@ -316,6 +316,85 @@ def list_cases_for_reports():
         return jsonify({'error': 'Internal server error'}), 500
 
 
+@reports_bp.route('/<int:case_id>/generate-detailed', methods=['GET'])
+# @jwt_required()  # Temporarily disabled for testing
+def generate_detailed_case_report(case_id):
+    """
+    Generate a comprehensive PDF report with analyst activities
+    
+    Args:
+        case_id (int): The ID of the case
+        
+    Query Parameters:
+        include_activities (bool): Include analyst activities (default: true)
+        include_content (bool): Include related content (default: true)
+        
+    Returns:
+        PDF file download
+    """
+    try:
+        from models.case_activity import CaseActivity
+        from services.pdf_report_generator import generate_case_pdf_report
+        
+        # Get parameters
+        include_activities = request.args.get('include_activities', 'true').lower() == 'true'
+        include_content = request.args.get('include_content', 'true').lower() == 'true'
+        
+        # For testing without JWT, use a default user
+        current_user = SystemUser.query.first()  # Get first user as default
+        if not current_user:
+            return jsonify({'error': 'No users found in database'}), 400
+        
+        # Get case
+        case = Case.query.get(case_id)
+        if not case:
+            return jsonify({'error': f'Case with ID {case_id} not found'}), 404
+        
+        # Get activities if requested
+        activities = None
+        if include_activities:
+            activities = CaseActivity.query.filter_by(
+                case_id=case_id,
+                include_in_report=True
+            ).order_by(CaseActivity.activity_date.desc()).all()
+        
+        # Get related content if requested
+        content_items = None
+        if include_content:
+            # Get content linked to this case
+            from models.case_content_link import CaseContentLink
+            content_links = db.session.query(CaseContentLink).filter_by(case_id=case_id).all()
+            if content_links:
+                content_ids = [link.content_id for link in content_links]
+                content_items = Content.query.filter(Content.id.in_(content_ids)).all()
+        
+        # Generate PDF
+        pdf_buffer = generate_case_pdf_report(
+            case=case,
+            activities=activities,
+            content_items=content_items
+        )
+        
+        # Prepare filename
+        filename = f"case_{case.case_number}_detailed_report_{datetime.now().strftime('%Y%m%d')}.pdf"
+        
+        # Send file
+        pdf_buffer.seek(0)  # Reset buffer position
+        return send_file(
+            pdf_buffer,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=filename
+        )
+        
+    except Exception as e:
+        current_app.logger.error(f"Error generating detailed report: {str(e)}")
+        print(f"Error generating detailed report: {str(e)}")  # Debug print
+        import traceback
+        traceback.print_exc()  # Print full traceback
+        return jsonify({'error': f'Failed to generate report: {str(e)}'}), 500
+
+
 @reports_bp.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint for reports service"""

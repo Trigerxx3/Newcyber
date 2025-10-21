@@ -84,6 +84,7 @@ const navigation = [
     icon: FileText,
     description: 'Review and approve analyst cases and reports',
     subItems: [
+      { name: 'Cases Overview', href: '/admin/cases', icon: Eye },
       { name: 'Case Requests', href: '/admin/case-requests', icon: Clock },
       { name: 'Pending Reports', href: '/admin/reports', icon: Clock },
       { name: 'Approved Reports', href: '/admin/reports/approved', icon: UserCheck },

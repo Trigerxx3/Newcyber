@@ -114,16 +114,31 @@ export default function CaseRequestManagement() {
       setLoading(true)
       setError(null)
       
+      // Don't pass status parameter - let backend return all and filter client-side
       const response = await apiClient.getCaseRequests() as any
       
       if (response.status === 'success') {
         setRequests(response.data || [])
       } else {
-        setError('Failed to fetch case requests')
+        // If we get a response but it's not success, show the error message
+        setError(response.message || 'Failed to fetch case requests')
+        setRequests([]) // Set empty array so UI doesn't break
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching case requests:', error)
-      setError('Error fetching case requests')
+      // Gracefully handle the error - set empty array and show user-friendly message
+      const errorMessage = error?.message || 'Error fetching case requests'
+      
+      // Check if it's a database/backend initialization issue
+      if (errorMessage.includes('table') || errorMessage.includes('database')) {
+        setError('Database table not initialized. Case requests feature may not be available yet.')
+      } else if (errorMessage.includes('400')) {
+        setError('Backend validation error. This may be due to missing database tables or configuration.')
+      } else {
+        setError(errorMessage)
+      }
+      
+      setRequests([]) // Always set empty array to avoid UI crashes
     } finally {
       setLoading(false)
     }

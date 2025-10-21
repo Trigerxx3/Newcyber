@@ -43,7 +43,7 @@ def init_extensions(app):
             # Test the database connection
             result = db.session.execute(text('SELECT 1'))
             result.fetchone()
-            print(f"✅ Database connection successful! Using: {app.config.get('SQLALCHEMY_DATABASE_URI', 'Unknown')}")
+            print(f"[OK] Database connection successful! Using: {app.config.get('SQLALCHEMY_DATABASE_URI', 'Unknown')}")
         except Exception as e:
-            print(f"❌ Database connection failed: {e}")
+            print(f"[ERROR] Database connection failed: {e}")
             print("Make sure your database is running and DATABASE_URL is set correctly")

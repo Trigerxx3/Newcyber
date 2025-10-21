@@ -33,6 +33,9 @@ class InstagramScraper:
         self.is_authenticated = False
         self.rate_limit_delay = 2  # Seconds between requests
         
+        # Session storage path (persist login sessions)
+        self.session_file = os.path.join(os.path.dirname(__file__), '..', 'instagram_session.json')
+        
         # Instagram Basic Display API endpoints
         self.base_url = "https://graph.instagram.com"
         self.auth_url = "https://api.instagram.com/oauth/authorize"
@@ -54,9 +57,32 @@ class InstagramScraper:
             logger.info(f"Attempting to authenticate Instagram account: {self.username}")
             self.api_client = Client()
             
-            # Login with credentials
+            # Try to load existing session first
+            if os.path.exists(self.session_file):
+                try:
+                    logger.info("📂 Found existing Instagram session, loading...")
+                    self.api_client.load_settings(self.session_file)
+                    self.api_client.login(self.username, self.password)
+                    
+                    # Verify session is still valid
+                    self.api_client.get_timeline_feed()
+                    
+                    self.is_authenticated = True
+                    logger.info(f"✅ Loaded saved Instagram session for: {self.username}")
+                    logger.info("🔥 REAL INSTAGRAM SCRAPING IS NOW ACTIVE!")
+                    return True
+                except Exception as session_error:
+                    logger.warning(f"⚠️  Saved session invalid: {session_error}")
+                    logger.info("Creating new session...")
+            
+            # Login with credentials (fresh login)
             try:
                 self.api_client.login(self.username, self.password)
+                
+                # Save session for future use
+                self.api_client.dump_settings(self.session_file)
+                logger.info(f"💾 Saved Instagram session to: {self.session_file}")
+                
                 self.is_authenticated = True
                 logger.info(f"✅ Instagram authentication successful for: {self.username}")
                 logger.info("🔥 REAL INSTAGRAM SCRAPING IS NOW ACTIVE!")

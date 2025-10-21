@@ -22,6 +22,12 @@ venv/
 *.sqlite3
 local.db
 
+# Session files (Instagram, Telegram, etc.)
+*_session.json
+*.session
+instagram_session.json
+telegram_session.session
+
 # IDE
 .vscode/
 .idea/

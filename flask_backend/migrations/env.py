@@ -25,9 +25,23 @@ from models.case_content_link import CaseContentLink
 # this is the Alembic Config object
 config = context.config
 
-# Set the database URL from environment
-# Use DATABASE_URL for PostgreSQL, fallback to SQLite for development
-database_url = os.getenv('DATABASE_URL') or 'sqlite:///local.db'
+# Smart database selection for migrations:
+# If USE_PRODUCTION_DB=true is set, use Railway PostgreSQL
+# Otherwise, use local SQLite (even if DATABASE_URL exists in .env)
+use_prod_db = os.getenv('USE_PRODUCTION_DB', '').lower() == 'true'
+
+if use_prod_db:
+    # Use Railway PostgreSQL
+    database_url = os.getenv('DATABASE_URL')
+    if database_url and database_url.startswith('postgres://'):
+        database_url = database_url.replace('postgres://', 'postgresql://', 1)
+    print(f"🌐 Alembic: Using Railway PostgreSQL database")
+else:
+    # Use local SQLite
+    db_path = os.path.join(os.path.dirname(__file__), '..', 'cyber_intel.db')
+    database_url = f'sqlite:///{db_path}'
+    print(f"💾 Alembic: Using local SQLite database at {db_path}")
+
 config.set_main_option('sqlalchemy.url', database_url)
 
 # Interpret the config file for Python logging

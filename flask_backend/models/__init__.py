@@ -9,6 +9,7 @@ from .identifier import Identifier, IdentifierType, IdentifierStatus
 from .osint_result import OSINTResult, OSINTSearchType, OSINTStatus
 from .osint_identifier_link import OSINTIdentifierLink, LinkType, LinkConfidence
 from .case import Case, CaseStatus, CasePriority, CaseType
+from .case_activity import CaseActivity, ActivityType, ActivityStatus
 from .user_case_link import UserCaseLink, UserCaseRole, UserCaseStatus
 from .case_request import CaseRequest, RequestStatus
 from .active_case import ActiveCase

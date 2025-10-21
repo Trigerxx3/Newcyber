@@ -1,0 +1,18 @@
+{
+  "drugs": {
+    "mdma": ["mdma", "ecstasy", "molly", "e", "x", "crystal", "crystals"],
+    "lsd": ["lsd", "acid", "tabs", "blotter", "trip"],
+    "cocaine": ["coke", "cocaine", "crack", "snow", "white"],
+    "marijuana": ["weed", "pot", "marijuana", "cannabis", "bud", "joint", "blunt"],
+    "heroin": ["heroin", "h", "smack", "dope", "brown"],
+    "meth": ["meth", "crystal meth", "ice", "speed", "tina"]
+  },
+  "intent_keywords": {
+    "selling": ["sell", "sale", "buy", "purchase", "deal", "trade", "supply", "stock", "available", "hit me up", "dm me", "contact"],
+    "buying": ["buy", "purchase", "need", "want", "looking for", "seeking"],
+    "using": ["use", "using", "trip", "high", "stoned", "wasted"]
+  },
+  "payment_keywords": ["cash", "money", "payment", "pay", "cost", "price", "expensive", "cheap"],
+  "location_keywords": ["delivery", "pickup", "location", "address", "meet", "mumbai", "goa", "delhi"],
+  "urgency_keywords": ["urgent", "asap", "quick", "fast", "limited", "only", "exclusive"]
+}

@@ -286,8 +286,7 @@ class ContentAnalysisService:
         
         # Check for drug keywords (whole word matching to avoid false positives)
         import re
-        for drug_category, drug_info in self.drug_data.get("drugs", {}).items():
-            keywords = drug_info.get("keywords", []) + drug_info.get("slang", [])
+        for drug_category, keywords in self.drug_data.get("drugs", {}).items():
             for keyword in keywords:
                 # Use word boundary regex to avoid partial matches
                 pattern = r'\b' + re.escape(keyword.lower()) + r'\b'
@@ -356,10 +355,14 @@ class ContentAnalysisService:
         # Base score from drug keywords
         for drug_match in drug_matches:
             # Find drug category and severity
-            for drug_category, drug_info in self.drug_data.get("drugs", {}).items():
-                keywords = drug_info.get("keywords", []) + drug_info.get("slang", [])
+            for drug_category, keywords in self.drug_data.get("drugs", {}).items():
                 if drug_match in [k.lower() for k in keywords]:
-                    severity = drug_info.get("severity", 3)
+                    # Assign severity based on drug category
+                    severity_map = {
+                        "mdma": 4, "lsd": 4, "cocaine": 5, "heroin": 5, 
+                        "meth": 5, "marijuana": 2
+                    }
+                    severity = severity_map.get(drug_category, 3)
                     score += severity * 3  # Reduced multiplier for more reasonable scoring
                     break
         

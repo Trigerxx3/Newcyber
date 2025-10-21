@@ -47,7 +47,8 @@ import {
   RefreshCw,
   BarChart3,
   Shield,
-  Star
+  Star,
+  FileBarChart
 } from 'lucide-react'
 import { apiClient } from '@/lib/api'
 import ProtectedRoute from '@/components/ProtectedRoute'
@@ -236,6 +237,46 @@ export default function ReportsPage() {
       toast({
         title: "Error",
         description: "Failed to generate report",
+        variant: "destructive"
+      })
+    } finally {
+      setGeneratingReports(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(caseId)
+        return newSet
+      })
+    }
+  }
+
+  const generateDetailedReport = async (caseId: number) => {
+    try {
+      setGeneratingReports(prev => new Set(prev).add(caseId))
+      
+      const blob = await apiClient.generateDetailedCaseReport(caseId, {
+        include_activities: true,
+        include_content: true
+      })
+      
+      const caseData = cases.find(c => c.id === caseId)
+      const filename = `case_${caseData?.case_number || caseId}_detailed_${new Date().toISOString().split('T')[0]}.pdf`
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+
+      toast({
+        title: "Success",
+        description: "Detailed report with activities downloaded successfully",
+      })
+    } catch (error: any) {
+      console.error('Error generating detailed report:', error)
+      toast({
+        title: "Error",
+        description: "Failed to generate detailed report",
         variant: "destructive"
       })
     } finally {
@@ -587,6 +628,7 @@ export default function ReportsPage() {
                               size="sm"
                               className="border-white/10 hover:bg-white/5"
                               disabled={previewLoading}
+                              title="Preview report"
                             >
                               {previewLoading ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -596,14 +638,28 @@ export default function ReportsPage() {
                             </Button>
                             <Button
                               onClick={() => generateReport(case_.id)}
+                              variant="outline"
                               size="sm"
-                              className="bg-primary hover:bg-primary/90"
                               disabled={generatingReports.has(case_.id)}
+                              title="Download basic report"
                             >
                               {generatingReports.has(case_.id) ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
                               ) : (
                                 <Download className="h-4 w-4" />
+                              )}
+                            </Button>
+                            <Button
+                              onClick={() => generateDetailedReport(case_.id)}
+                              size="sm"
+                              className="bg-primary hover:bg-primary/90"
+                              disabled={generatingReports.has(case_.id)}
+                              title="Download detailed report with activities"
+                            >
+                              {generatingReports.has(case_.id) ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <FileBarChart className="h-4 w-4" />
                               )}
                             </Button>
                           </div>

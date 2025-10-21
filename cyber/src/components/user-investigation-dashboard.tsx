@@ -102,8 +102,13 @@ export function UserInvestigationDashboard() {
     try {
       console.log(`🔍 Starting investigation for user: ${username.trim()} on ${platform}`);
       const data = await apiClient.investigateUser(username.trim(), platform) as any;
+      
+      console.log('📦 Raw response from backend:', data);
+      console.log('📦 Response status:', data?.status);
+      console.log('📦 Response data:', data?.data);
 
       if (data?.status === 'success') {
+        console.log('✅ Setting results:', data.data);
         setResults(data.data);
         console.log('✅ Investigation completed successfully');
       } else {

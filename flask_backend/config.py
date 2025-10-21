@@ -44,14 +44,28 @@ class Config:
 class DevelopmentConfig(Config):
     """Development configuration"""
     DEBUG = True
-    # Use SQLite for local development
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
-        'sqlite:///' + os.path.join(os.path.dirname(__file__), 'local.db')
+    
+    # Smart database selection for development:
+    # If USE_PRODUCTION_DB=true is set, use Railway PostgreSQL
+    # Otherwise, use local SQLite
+    use_prod_db = os.environ.get('USE_PRODUCTION_DB', '').lower() == 'true'
+    
+    if use_prod_db and os.environ.get('DATABASE_URL'):
+        # Connect to Railway from local machine
+        database_url = os.environ.get('DATABASE_URL')
+        if database_url.startswith('postgres://'):
+            database_url = database_url.replace('postgres://', 'postgresql://', 1)
+        SQLALCHEMY_DATABASE_URI = database_url
+        print("Development mode: Using Railway PostgreSQL database")
+    else:
+        # Use local SQLite
+        SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(os.path.dirname(__file__), 'cyber_intel.db')
+        print("Development mode: Using local SQLite database")
     
     @staticmethod
     def init_app(app):
         Config.init_app(app)
-        print(f"Development mode: Using database {app.config['SQLALCHEMY_DATABASE_URI']}")
+        print(f"Database: {app.config['SQLALCHEMY_DATABASE_URI'][:80]}...")
 
 class ProductionConfig(Config):
     """Production configuration"""
