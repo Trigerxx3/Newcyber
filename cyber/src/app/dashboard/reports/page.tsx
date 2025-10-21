@@ -48,7 +48,16 @@ import {
   BarChart3,
   Shield,
   Star,
-  FileBarChart
+  FileBarChart,
+  Activity,
+  Users,
+  TrendingUp,
+  Edit,
+  Trash2,
+  Plus,
+  UserCheck,
+  Timer,
+  Target
 } from 'lucide-react'
 import { apiClient } from '@/lib/api'
 import ProtectedRoute from '@/components/ProtectedRoute'
@@ -105,6 +114,52 @@ interface ReportPreview {
   }>
 }
 
+interface AnalystActivity {
+  id: number
+  case_id: number
+  analyst_id: number
+  activity_type: string
+  title: string
+  description: string
+  status: string
+  tags: string[]
+  priority: string
+  activity_date: string
+  time_spent_minutes: number
+  include_in_report: boolean
+  is_confidential: boolean
+  visibility_level: string
+  created_at: string
+  updated_at: string
+  analyst: {
+    id: number
+    username: string
+    email: string
+  }
+  analyst_name?: string
+  metadata?: any
+}
+
+interface AnalystActivitySummary {
+  total_activities: number
+  total_time_spent_minutes: number
+  total_time_spent_hours: number
+  by_type: Record<string, number>
+  by_analyst: Record<string, number>
+  report_items_count: number
+  recent_activities: AnalystActivity[]
+}
+
+interface Analyst {
+  id: number
+  username: string
+  email: string
+  role: string
+  total_activities: number
+  total_time_spent: number
+  active_cases: number
+}
+
 export default function ReportsPage() {
   const { systemUser } = useAuth()
   const { activeCase } = useActiveCase()
@@ -124,11 +179,35 @@ export default function ReportsPage() {
   })
   const [reportPreview, setReportPreview] = useState<ReportPreview | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
+  
+  // Analyst Activity Tracking State
+  const [analystActivities, setAnalystActivities] = useState<AnalystActivity[]>([])
+  const [activitySummary, setActivitySummary] = useState<AnalystActivitySummary | null>(null)
+  const [analysts, setAnalysts] = useState<Analyst[]>([])
+  const [selectedAnalyst, setSelectedAnalyst] = useState<number | null>(null)
+  const [activityFilter, setActivityFilter] = useState('all')
+  const [activityTypeFilter, setActivityTypeFilter] = useState('all')
+  const [showActivityDialog, setShowActivityDialog] = useState(false)
+  const [editingActivity, setEditingActivity] = useState<AnalystActivity | null>(null)
+  const [activityLoading, setActivityLoading] = useState(false)
+  const [previewActivity, setPreviewActivity] = useState<AnalystActivity | null>(null)
+  const [showActivityPreviewDialog, setShowActivityPreviewDialog] = useState(false)
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null)
+  const [showPdfPreviewDialog, setShowPdfPreviewDialog] = useState(false)
+  const [pdfGenerating, setPdfGenerating] = useState(false)
 
   useEffect(() => {
     loadCases()
     loadActivePreview()
+    loadAnalysts()
   }, [])
+
+  useEffect(() => {
+    if (activeCase?.id) {
+      loadCaseActivities(activeCase.id)
+      loadActivitySummary(activeCase.id)
+    }
+  }, [activeCase?.id])
 
   useEffect(() => {
     // When active case changes, refresh active preview
@@ -194,6 +273,73 @@ export default function ReportsPage() {
     }
   }
 
+  const loadAnalysts = async () => {
+    try {
+      const response = await apiClient.getUsers() as any
+      if (response.data?.data?.users) {
+        const analystData = response.data.data.users.map((user: any) => ({
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          role: user.role,
+          total_activities: 0,
+          total_time_spent: 0,
+          active_cases: 0
+        }))
+        setAnalysts(analystData)
+      }
+    } catch (error: any) {
+      console.error('Error loading analysts:', error)
+      toast({
+        title: "Error",
+        description: "Failed to load analysts",
+        variant: "destructive"
+      })
+    }
+  }
+
+  const loadCaseActivities = async (caseId: number) => {
+    try {
+      setActivityLoading(true)
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000'}/api/cases/${caseId}/activities`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        },
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setAnalystActivities(data.activities || [])
+      }
+    } catch (error: any) {
+      console.error('Error loading case activities:', error)
+      toast({
+        title: "Error",
+        description: "Failed to load case activities",
+        variant: "destructive"
+      })
+    } finally {
+      setActivityLoading(false)
+    }
+  }
+
+  const loadActivitySummary = async (caseId: number) => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000'}/api/cases/${caseId}/activities/summary`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        },
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setActivitySummary(data)
+      }
+    } catch (error: any) {
+      console.error('Error loading activity summary:', error)
+    }
+  }
+
   const generateReport = async (caseId: number) => {
     try {
       setGeneratingReports(prev => new Set(prev).add(caseId))
@@ -244,6 +390,134 @@ export default function ReportsPage() {
         const newSet = new Set(prev)
         newSet.delete(caseId)
         return newSet
+      })
+    }
+  }
+
+  const generateAndPreviewPdf = async (caseId: number) => {
+    try {
+      setPdfGenerating(true)
+      
+      // Get the API base URL from environment or use default
+      let apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000'
+      console.log('Generating PDF for case:', caseId, 'API URL:', apiBaseUrl)
+      console.log('Environment API URL:', process.env.NEXT_PUBLIC_API_URL)
+      
+      // Ensure we have a complete URL - if truncated, use hardcoded fallback
+      if (!apiBaseUrl || apiBaseUrl.length < 10 || apiBaseUrl.includes('127.0.0')) {
+        apiBaseUrl = 'http://127.0.0.1:5000'
+        console.log('Using fallback API URL:', apiBaseUrl)
+      }
+      
+      // Try the detailed PDF generation endpoint first
+      let response = await fetch(`${apiBaseUrl}/api/reports/${caseId}/generate-detailed?include_activities=true&include_content=true`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        },
+      })
+      
+      // If detailed endpoint fails, try the basic endpoint
+      if (!response.ok) {
+        console.log('Detailed PDF generation failed, trying basic endpoint...')
+        response = await fetch(`${apiBaseUrl}/api/reports/${caseId}/generate`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+          },
+        })
+      }
+
+      console.log('PDF generation response:', response.status, response.statusText)
+      console.log('Content-Type:', response.headers.get('content-type'))
+      console.log('Response URL:', response.url)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('PDF generation failed:', errorText)
+        console.error('Full response:', response)
+        throw new Error(`Failed to generate report: ${response.status} ${response.statusText}. Error: ${errorText}`)
+      }
+
+      // Create blob for preview
+      const blob = await response.blob()
+      console.log('PDF blob created:', blob.size, 'bytes, type:', blob.type)
+      
+      if (blob.size === 0) {
+        throw new Error('Generated PDF is empty')
+      }
+      
+      const url = window.URL.createObjectURL(blob)
+      console.log('PDF preview URL created:', url)
+      
+      setPdfPreviewUrl(url)
+      setShowPdfPreviewDialog(true)
+
+      toast({
+        title: "PDF Generated",
+        description: "PDF preview is ready. You can now download it.",
+      })
+    } catch (error: any) {
+      console.error('Error generating PDF preview:', error)
+      toast({
+        title: "Error",
+        description: `Failed to generate PDF preview: ${error.message}`,
+        variant: "destructive"
+      })
+    } finally {
+      setPdfGenerating(false)
+    }
+  }
+
+  const downloadPdfFromPreview = () => {
+    if (pdfPreviewUrl && activeCase) {
+      const caseData = cases.find(c => c.id === activeCase.id)
+      const filename = `case_${caseData?.case_number || activeCase.id}_detailed_${new Date().toISOString().split('T')[0]}.pdf`
+      const a = document.createElement('a')
+      a.href = pdfPreviewUrl
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      
+      toast({
+        title: "Download Started",
+        description: "PDF download has started",
+      })
+    }
+  }
+
+  const closePdfPreview = () => {
+    if (pdfPreviewUrl) {
+      window.URL.revokeObjectURL(pdfPreviewUrl)
+      setPdfPreviewUrl(null)
+    }
+    setShowPdfPreviewDialog(false)
+  }
+
+  const debugApiConnection = async () => {
+    try {
+      const apiBaseUrl = 'http://127.0.0.1:5000'
+      console.log('Testing API connection to:', apiBaseUrl)
+      
+      // Test basic health endpoint
+      const healthResponse = await fetch(`${apiBaseUrl}/api/health`)
+      console.log('Health check:', healthResponse.status, healthResponse.statusText)
+      
+      // Test reports endpoint
+      const reportsResponse = await fetch(`${apiBaseUrl}/api/reports/1/generate-detailed`)
+      console.log('Reports endpoint:', reportsResponse.status, reportsResponse.statusText)
+      
+      toast({
+        title: "Debug Info",
+        description: `Health: ${healthResponse.status}, Reports: ${reportsResponse.status}`,
+      })
+    } catch (error: any) {
+      console.error('Debug connection error:', error)
+      toast({
+        title: "Debug Error",
+        description: `Connection failed: ${error.message}`,
+        variant: "destructive"
       })
     }
   }
@@ -410,12 +684,19 @@ export default function ReportsPage() {
                       <Button
                         className="bg-primary hover:bg-primary/90"
                         onClick={() => {
-                          if (activeCase?.id) generateReport(activeCase.id)
+                          if (activeCase?.id) generateAndPreviewPdf(activeCase.id)
                         }}
-                        disabled={generatingReports.has(activeCase?.id)}
+                        disabled={pdfGenerating}
                       >
-                        {generatingReports.has(activeCase?.id) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                        {pdfGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                         <span className="ml-2">Generate PDF</span>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={debugApiConnection}
+                        className="ml-2"
+                      >
+                        Debug API
                       </Button>
                     </div>
                   </div>
@@ -425,6 +706,242 @@ export default function ReportsPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Analyst Activity Tracking Section */}
+          {activeCase && (
+            <div className="mb-8">
+              <Card className="glassmorphism">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Activity className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-lg">Analyst Activity Tracking</CardTitle>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowActivityDialog(true)}
+                        className="border-white/10 hover:bg-white/5"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Activity
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => activeCase?.id && loadCaseActivities(activeCase.id)}
+                        className="border-white/10 hover:bg-white/5"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  <CardDescription>
+                    Track and manage all analyst activities for Case #{activeCase.case_number}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {/* Activity Summary Stats */}
+                  {activitySummary && (
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                      <div className="text-center p-4 border border-white/10 rounded-lg">
+                        <div className="text-2xl font-bold text-primary">{activitySummary.total_activities}</div>
+                        <div className="text-sm text-muted-foreground">Total Activities</div>
+                      </div>
+                      <div className="text-center p-4 border border-white/10 rounded-lg">
+                        <div className="text-2xl font-bold text-orange-400">{activitySummary.total_time_spent_hours}h</div>
+                        <div className="text-sm text-muted-foreground">Time Tracked</div>
+                      </div>
+                      <div className="text-center p-4 border border-white/10 rounded-lg">
+                        <div className="text-2xl font-bold text-green-400">{activitySummary.report_items_count}</div>
+                        <div className="text-sm text-muted-foreground">Report Items</div>
+                      </div>
+                      <div className="text-center p-4 border border-white/10 rounded-lg">
+                        <div className="text-2xl font-bold text-blue-400">{Object.keys(activitySummary.by_analyst).length}</div>
+                        <div className="text-sm text-muted-foreground">Contributors</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Activity Filters */}
+                  <div className="flex flex-wrap gap-4 mb-6">
+                    <Select value={selectedAnalyst?.toString() || 'all'} onValueChange={(value) => setSelectedAnalyst(value === 'all' ? null : parseInt(value))}>
+                      <SelectTrigger className="w-48">
+                        <SelectValue placeholder="Filter by analyst" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Analysts</SelectItem>
+                        {analysts.map((analyst) => (
+                          <SelectItem key={analyst.id} value={analyst.id.toString()}>
+                            {analyst.username}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    
+                    <Select value={activityTypeFilter} onValueChange={setActivityTypeFilter}>
+                      <SelectTrigger className="w-48">
+                        <SelectValue placeholder="Filter by type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Types</SelectItem>
+                        <SelectItem value="note">Notes</SelectItem>
+                        <SelectItem value="finding">Findings</SelectItem>
+                        <SelectItem value="evidence">Evidence</SelectItem>
+                        <SelectItem value="interview">Interviews</SelectItem>
+                        <SelectItem value="analysis">Analysis</SelectItem>
+                        <SelectItem value="action">Actions</SelectItem>
+                        <SelectItem value="meeting">Meetings</SelectItem>
+                        <SelectItem value="communication">Communication</SelectItem>
+                        <SelectItem value="task">Tasks</SelectItem>
+                        <SelectItem value="update">Updates</SelectItem>
+                        <SelectItem value="milestone">Milestones</SelectItem>
+                        <SelectItem value="observation">Observations</SelectItem>
+                        <SelectItem value="recommendation">Recommendations</SelectItem>
+                        <SelectItem value="decision">Decisions</SelectItem>
+                        <SelectItem value="investigation">User Investigation</SelectItem>
+                        <SelectItem value="content_analysis">Content Analysis</SelectItem>
+                        <SelectItem value="osint_search">OSINT Search</SelectItem>
+                        <SelectItem value="batch_analysis">Batch Analysis</SelectItem>
+                        <SelectItem value="platform_scraping">Platform Scraping</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    <Select value={activityFilter} onValueChange={setActivityFilter}>
+                      <SelectTrigger className="w-48">
+                        <SelectValue placeholder="Filter by status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Status</SelectItem>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                        <SelectItem value="draft">Draft</SelectItem>
+                        <SelectItem value="archived">Archived</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Activities List */}
+                  <div className="space-y-4">
+                    {activityLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        <span className="ml-2 text-muted-foreground">Loading activities...</span>
+                      </div>
+                    ) : analystActivities.length > 0 ? (
+                      analystActivities
+                        .filter(activity => {
+                          if (selectedAnalyst && activity.analyst_id !== selectedAnalyst) return false
+                          if (activityTypeFilter !== 'all' && activity.activity_type !== activityTypeFilter) return false
+                          if (activityFilter !== 'all' && activity.status !== activityFilter) return false
+                          return true
+                        })
+                        .map((activity) => (
+                          <div key={activity.id} className="p-4 border border-white/10 rounded-lg hover:border-white/20 transition-colors">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <Badge variant="outline" className="text-xs">
+                                    {activity.activity_type}
+                                  </Badge>
+                                  <Badge className={getPriorityColor(activity.priority)}>
+                                    {activity.priority}
+                                  </Badge>
+                                  {activity.include_in_report && (
+                                    <Badge variant="secondary" className="text-xs">
+                                      <FileText className="h-3 w-3 mr-1" />
+                                      In Report
+                                    </Badge>
+                                  )}
+                                  {activity.is_confidential && (
+                                    <Badge variant="destructive" className="text-xs">
+                                      <Shield className="h-3 w-3 mr-1" />
+                                      Confidential
+                                    </Badge>
+                                  )}
+                                </div>
+                                <h4 className="font-semibold text-foreground mb-1">{activity.title}</h4>
+                                <p className="text-sm text-muted-foreground mb-2">{activity.description}</p>
+                                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                  <div className="flex items-center gap-1">
+                                    <User className="h-3 w-3" />
+                                    {activity.analyst.username}
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <Calendar className="h-3 w-3" />
+                                    {new Date(activity.activity_date).toLocaleDateString()}
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <Timer className="h-3 w-3" />
+                                    {activity.time_spent_minutes} min
+                                  </div>
+                                  {activity.tags && activity.tags.length > 0 && (
+                                    <div className="flex items-center gap-1">
+                                      <Target className="h-3 w-3" />
+                                      {activity.tags.join(', ')}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 ml-4">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setEditingActivity(activity)
+                                    setShowActivityDialog(true)
+                                  }}
+                                  className="border-white/10 hover:bg-white/5"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setPreviewActivity(activity)
+                                    setShowActivityPreviewDialog(true)
+                                  }}
+                                  className="border-white/10 hover:bg-white/5"
+                                  title="Preview activity"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    // Toggle report inclusion
+                                    const updatedActivities = analystActivities.map(a => 
+                                      a.id === activity.id ? { ...a, include_in_report: !a.include_in_report } : a
+                                    )
+                                    setAnalystActivities(updatedActivities)
+                                  }}
+                                  className={`border-white/10 hover:bg-white/5 ${activity.include_in_report ? 'bg-green-500/20 text-green-400' : ''}`}
+                                  title={activity.include_in_report ? 'Remove from report' : 'Include in report'}
+                                >
+                                  <FileText className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                    ) : (
+                      <div className="text-center py-8">
+                        <Activity className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                        <p className="text-muted-foreground font-medium">No activities found</p>
+                        <p className="text-sm text-muted-foreground/70 mt-1">
+                          Start tracking analyst work by adding activities
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
           {/* Stats Overview */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -684,6 +1201,167 @@ export default function ReportsPage() {
           </Card>
     </main>
 
+        {/* Activity Dialog */}
+        <Dialog open={showActivityDialog} onOpenChange={setShowActivityDialog}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center space-x-2">
+                <Activity className="h-5 w-5 text-primary" />
+                <span>{editingActivity ? 'Edit Activity' : 'Add New Activity'}</span>
+              </DialogTitle>
+              <DialogDescription>
+                {editingActivity ? 'Update the activity details' : 'Track analyst work and investigation activities'}
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-2 block">Activity Type</label>
+                  <Select defaultValue={editingActivity?.activity_type || 'note'}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select activity type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="note">Note</SelectItem>
+                      <SelectItem value="finding">Finding</SelectItem>
+                      <SelectItem value="evidence">Evidence</SelectItem>
+                      <SelectItem value="interview">Interview</SelectItem>
+                      <SelectItem value="analysis">Analysis</SelectItem>
+                      <SelectItem value="action">Action</SelectItem>
+                      <SelectItem value="meeting">Meeting</SelectItem>
+                      <SelectItem value="communication">Communication</SelectItem>
+                      <SelectItem value="task">Task</SelectItem>
+                      <SelectItem value="update">Update</SelectItem>
+                      <SelectItem value="milestone">Milestone</SelectItem>
+                      <SelectItem value="observation">Observation</SelectItem>
+                      <SelectItem value="recommendation">Recommendation</SelectItem>
+                      <SelectItem value="decision">Decision</SelectItem>
+                      <SelectItem value="investigation">User Investigation</SelectItem>
+                      <SelectItem value="content_analysis">Content Analysis</SelectItem>
+                      <SelectItem value="osint_search">OSINT Search</SelectItem>
+                      <SelectItem value="batch_analysis">Batch Analysis</SelectItem>
+                      <SelectItem value="platform_scraping">Platform Scraping</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-2 block">Priority</label>
+                  <Select defaultValue={editingActivity?.priority || 'medium'}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select priority" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="critical">Critical</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-foreground mb-2 block">Title</label>
+                <Input 
+                  placeholder="Activity title" 
+                  defaultValue={editingActivity?.title || ''}
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-foreground mb-2 block">Description</label>
+                <textarea 
+                  className="w-full min-h-[100px] p-3 border border-white/10 rounded-lg bg-transparent text-foreground placeholder:text-muted-foreground focus:border-primary/50 focus:outline-none"
+                  placeholder="Detailed description of the activity..."
+                  defaultValue={editingActivity?.description || ''}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-2 block">Time Spent (minutes)</label>
+                  <Input 
+                    type="number" 
+                    placeholder="0" 
+                    defaultValue={editingActivity?.time_spent_minutes || 0}
+                  />
+                </div>
+                
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-2 block">Activity Date</label>
+                  <Input 
+                    type="datetime-local" 
+                    defaultValue={editingActivity?.activity_date ? new Date(editingActivity.activity_date).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16)}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-foreground mb-2 block">Tags (comma-separated)</label>
+                <Input 
+                  placeholder="investigation, suspect-a, evidence" 
+                  defaultValue={editingActivity?.tags?.join(', ') || ''}
+                />
+              </div>
+
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-2">
+                  <input 
+                    type="checkbox" 
+                    id="include_in_report" 
+                    defaultChecked={editingActivity?.include_in_report ?? true}
+                    className="rounded border-white/10"
+                  />
+                  <label htmlFor="include_in_report" className="text-sm text-foreground">
+                    Include in PDF report
+                  </label>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <input 
+                    type="checkbox" 
+                    id="is_confidential" 
+                    defaultChecked={editingActivity?.is_confidential ?? false}
+                    className="rounded border-white/10"
+                  />
+                  <label htmlFor="is_confidential" className="text-sm text-foreground">
+                    Mark as confidential
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowActivityDialog(false)
+                  setEditingActivity(null)
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  // Handle save activity
+                  setShowActivityDialog(false)
+                  setEditingActivity(null)
+                  if (activeCase?.id) {
+                    loadCaseActivities(activeCase.id)
+                    loadActivitySummary(activeCase.id)
+                  }
+                }}
+                className="bg-primary hover:bg-primary/90"
+              >
+                {editingActivity ? 'Update Activity' : 'Create Activity'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* Report Preview Dialog */}
         <Dialog open={previewDialog.open} onOpenChange={(open) => setPreviewDialog({ open, caseId: null })}>
           <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
@@ -854,6 +1532,178 @@ export default function ReportsPage() {
                   Generate PDF Report
                 </Button>
               )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Activity Preview Dialog */}
+        <Dialog open={showActivityPreviewDialog} onOpenChange={setShowActivityPreviewDialog}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center space-x-2">
+                <Eye className="h-5 w-5 text-primary" />
+                <span>Activity Preview</span>
+              </DialogTitle>
+              <DialogDescription>
+                Preview of the selected activity details
+              </DialogDescription>
+            </DialogHeader>
+            
+            {previewActivity && (
+              <div className="space-y-6">
+                {/* Activity Header */}
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-foreground">{previewActivity.title}</h3>
+                    <p className="text-sm text-muted-foreground mt-1">{previewActivity.description}</p>
+                  </div>
+                  <div className="flex space-x-2">
+                    <Badge variant={previewActivity.priority === 'high' ? 'destructive' : previewActivity.priority === 'medium' ? 'default' : 'secondary'}>
+                      {previewActivity.priority}
+                    </Badge>
+                    <Badge variant="outline">
+                      {previewActivity.activity_type}
+                    </Badge>
+                    {previewActivity.include_in_report && (
+                      <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
+                        In Report
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                {/* Activity Details */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Analyst</label>
+                      <p className="text-sm text-foreground">{previewActivity.analyst?.username || 'Unknown'}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Status</label>
+                      <p className="text-sm text-foreground capitalize">{previewActivity.status}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Activity Date</label>
+                      <p className="text-sm text-foreground">
+                        {new Date(previewActivity.activity_date).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Time Spent</label>
+                      <p className="text-sm text-foreground">{previewActivity.time_spent_minutes} minutes</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Created</label>
+                      <p className="text-sm text-foreground">
+                        {new Date(previewActivity.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Confidential</label>
+                      <p className="text-sm text-foreground">
+                        {previewActivity.is_confidential ? 'Yes' : 'No'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tags */}
+                {previewActivity.tags && previewActivity.tags.length > 0 && (
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Tags</label>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {previewActivity.tags.map((tag, index) => (
+                        <Badge key={index} variant="outline" className="text-xs">
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Activity Metadata */}
+                {previewActivity.metadata && Object.keys(previewActivity.metadata).length > 0 && (
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Additional Information</label>
+                    <div className="mt-2 p-3 bg-muted/50 rounded-lg">
+                      <pre className="text-xs text-foreground whitespace-pre-wrap">
+                        {JSON.stringify(previewActivity.metadata, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowActivityPreviewDialog(false)}
+              >
+                Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* PDF Preview Dialog */}
+        <Dialog open={showPdfPreviewDialog} onOpenChange={closePdfPreview}>
+          <DialogContent className="max-w-6xl max-h-[90vh]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center space-x-2">
+                <FileText className="h-5 w-5 text-primary" />
+                <span>PDF Preview - {activeCase?.title}</span>
+              </DialogTitle>
+              <DialogDescription>
+                Preview the generated PDF report before downloading
+              </DialogDescription>
+            </DialogHeader>
+            
+            {pdfPreviewUrl && (
+              <div className="flex-1 min-h-0">
+                <div className="mb-4 p-3 bg-muted/50 rounded-lg">
+                  <p className="text-sm text-muted-foreground">
+                    PDF Preview - If the PDF doesn't display, try downloading it directly.
+                  </p>
+                </div>
+                <iframe
+                  src={pdfPreviewUrl}
+                  className="w-full h-[70vh] border rounded-lg"
+                  title="PDF Preview"
+                  onError={() => {
+                    console.error('PDF iframe failed to load')
+                    toast({
+                      title: "Preview Error",
+                      description: "PDF preview failed to load. You can still download the PDF.",
+                      variant: "destructive"
+                    })
+                  }}
+                />
+                <div className="mt-4 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    If the PDF doesn't appear above, click "Download PDF" to save it to your device.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <DialogFooter className="flex justify-between">
+              <Button
+                variant="outline"
+                onClick={closePdfPreview}
+              >
+                Close Preview
+              </Button>
+              <Button
+                onClick={downloadPdfFromPreview}
+                className="bg-primary hover:bg-primary/90"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download PDF
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

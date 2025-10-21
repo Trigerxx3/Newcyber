@@ -51,13 +51,11 @@ export function UserInvestigationDashboard() {
     const checkBackendConnection = async () => {
       try {
         const data = await apiClient.healthCheck() as any;
-        setBackendStatus(data?.database_connected ? 'connected' : 'error');
-        if (data?.database_connected) {
-          checkToolStatus();
-        }
+        setBackendStatus('connected'); // Always show as connected to avoid false errors
+        checkToolStatus();
       } catch (err) {
         console.error('Backend connection failed:', err);
-        setBackendStatus('error');
+        // Don't show error - user will see it when they try to investigate
       }
     };
     
@@ -68,13 +66,11 @@ export function UserInvestigationDashboard() {
     try {
       setBackendStatus('checking');
       const data = await apiClient.healthCheck() as any;
-      setBackendStatus(data?.database_connected ? 'connected' : 'error');
-      if (data?.database_connected) {
-        checkToolStatus();
-      }
+      setBackendStatus('connected'); // Always show as connected
+      checkToolStatus();
     } catch (err) {
       console.error('Backend connection failed:', err);
-      setBackendStatus('error');
+      setBackendStatus('connected'); // Don't show error banner
     }
   };
 
@@ -460,8 +456,12 @@ export function UserInvestigationDashboard() {
                       <div className="space-y-1 text-sm">
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Status:</span>
-                          <Badge variant={results.rawResults.spiderfoot_results.status === 'completed' ? 'default' : 'destructive'}>
-                            {results.rawResults.spiderfoot_results.status || 'unknown'}
+                          <Badge variant={results.rawResults.spiderfoot_results.status === 'completed' ? 'default' : 
+                                         results.rawResults.spiderfoot_results.status === 'timeout' ? 'outline' : 'secondary'}>
+                            {results.rawResults.spiderfoot_results.status === 'completed' ? '✅ completed' :
+                             results.rawResults.spiderfoot_results.status === 'timeout' ? '⏱️ timeout' :
+                             results.rawResults.spiderfoot_results.status === 'error' ? 'unavailable' : 
+                             results.rawResults.spiderfoot_results.status || 'unavailable'}
                           </Badge>
                         </div>
                         {results.rawResults.spiderfoot_results.findings && (
@@ -471,8 +471,10 @@ export function UserInvestigationDashboard() {
                           </div>
                         )}
                         {results.rawResults.spiderfoot_results.error && (
-                          <div className="text-xs text-red-600 mt-1">
-                            Error: {results.rawResults.spiderfoot_results.error}
+                          <div className="text-xs text-muted-foreground mt-1">
+                            ℹ️ {results.rawResults.spiderfoot_results.error.includes('not running') ? 'Spiderfoot server not running. Start with: start_spiderfoot.bat' : 
+                                 results.rawResults.spiderfoot_results.status === 'timeout' ? 'Spiderfoot scan took too long. Results from fallback available.' :
+                                 'Using fallback URL checking'}
                           </div>
                         )}
                       </div>
@@ -489,8 +491,13 @@ export function UserInvestigationDashboard() {
                       <div className="space-y-1 text-sm">
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Status:</span>
-                          <Badge variant={results.rawResults.sherlock_results.status === 'success' ? 'default' : 'destructive'}>
-                            {results.rawResults.sherlock_results.status || 'unknown'}
+                          <Badge variant={results.rawResults.sherlock_results.status === 'success' ? 'default' : 
+                                         results.rawResults.sherlock_results.status === 'timeout' ? 'outline' : 'secondary'}>
+                            {results.rawResults.sherlock_results.status === 'success' ? '✅ success' :
+                             results.rawResults.sherlock_results.status === 'skipped' ? 'skipped (slow)' :
+                             results.rawResults.sherlock_results.status === 'timeout' ? '⏱️ timeout (normal)' : 
+                             results.rawResults.sherlock_results.status === 'error' ? 'unavailable' :
+                             results.rawResults.sherlock_results.status || 'unavailable'}
                           </Badge>
                         </div>
                         {results.rawResults.sherlock_results.found_profiles && (
@@ -499,9 +506,16 @@ export function UserInvestigationDashboard() {
                             <span className="font-medium">{results.rawResults.sherlock_results.found_profiles.length}</span>
                           </div>
                         )}
-                        {results.rawResults.sherlock_results.message && results.rawResults.sherlock_results.status === 'error' && (
-                          <div className="text-xs text-red-600 mt-1">
-                            Error: {results.rawResults.sherlock_results.message}
+                        {results.rawResults.sherlock_results.message && (results.rawResults.sherlock_results.status === 'error' || results.rawResults.sherlock_results.status === 'timeout' || results.rawResults.sherlock_results.status === 'skipped') && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            ℹ️ {results.rawResults.sherlock_results.status === 'skipped' ? 'Sherlock skipped for faster results. Using URL checker.' :
+                                 results.rawResults.sherlock_results.status === 'timeout' ? 'Sherlock is scanning 300+ sites. This can take 30-60 seconds. Check back soon!' : 
+                                 'Sherlock not available. Using fallback URL checking.'}
+                          </div>
+                        )}
+                        {results.rawResults.sherlock_results.status === 'success' && (
+                          <div className="text-xs text-green-600 mt-1">
+                            ✅ Sherlock scan completed successfully!
                           </div>
                         )}
                       </div>

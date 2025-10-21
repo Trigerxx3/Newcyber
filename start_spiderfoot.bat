@@ -1,15 +1,8 @@
 @echo off
-echo ========================================
-echo Starting Spiderfoot Web UI
-echo ========================================
+echo Starting Spiderfoot OSINT Server...
 echo.
-echo Spiderfoot will be available at:
-echo http://127.0.0.1:5001
+echo Spiderfoot will run on: http://127.0.0.1:5001
+echo Press Ctrl+C to stop the server
 echo.
-echo Keep this window open while using the application
-echo Press Ctrl+C to stop Spiderfoot
-echo.
-echo ========================================
 cd osint_tools\spiderfoot
 python sf.py -l 127.0.0.1:5001
-pause

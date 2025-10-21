@@ -89,6 +89,10 @@ export default function CasesPage() {
   const [selectedCase, setSelectedCase] = useState<Case | null>(null)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [showDetailsDialog, setShowDetailsDialog] = useState(false)
+  const [showCloseDialog, setShowCloseDialog] = useState(false)
+  const [showArchiveDialog, setShowArchiveDialog] = useState(false)
+  const [closeNotes, setCloseNotes] = useState('')
+  const [archiveNotes, setArchiveNotes] = useState('')
   const [pagination, setPagination] = useState({
     page: 1,
     per_page: 10,
@@ -260,6 +264,50 @@ export default function CasesPage() {
       description: `Viewing details for case: ${caseItem.title}`,
       duration: 1500
     })
+  }
+
+  const handleCloseCase = async () => {
+    if (!selectedCase) return
+    try {
+      const response = await apiClient.closeCase(selectedCase.id, closeNotes)
+      if ((response as any)?.status === 'success') {
+        toast({
+          title: "Case Closed",
+          description: `Case "${selectedCase.title}" has been closed successfully`,
+        })
+        setShowCloseDialog(false)
+        setCloseNotes('')
+        await fetchCases()
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to close case",
+        variant: "destructive"
+      })
+    }
+  }
+
+  const handleArchiveCase = async () => {
+    if (!selectedCase) return
+    try {
+      const response = await apiClient.archiveCase(selectedCase.id, archiveNotes)
+      if ((response as any)?.status === 'success') {
+        toast({
+          title: "Case Archived",
+          description: `Case "${selectedCase.title}" has been moved to archive`,
+        })
+        setShowArchiveDialog(false)
+        setArchiveNotes('')
+        await fetchCases()
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to archive case. Only closed cases can be archived.",
+        variant: "destructive"
+      })
+    }
   }
 
   const handleCreateCase = async (caseData: any) => {
@@ -631,6 +679,42 @@ export default function CasesPage() {
                           >
                             Set Active
                           </Button>
+                          
+                          {/* Close Case Button - only for open cases */}
+                          {caseItem.status !== 'closed' && caseItem.status !== 'archived' && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setSelectedCase(caseItem)
+                                setShowCloseDialog(true)
+                              }}
+                              title="Close Case"
+                              className="text-orange-600 hover:text-orange-700"
+                            >
+                              <XCircle className="w-4 h-4 mr-1" />
+                              Close
+                            </Button>
+                          )}
+                          
+                          {/* Archive Button - only for closed cases */}
+                          {(caseItem.status === 'closed' || caseItem.status === 'resolved') && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setSelectedCase(caseItem)
+                                setShowArchiveDialog(true)
+                              }}
+                              title="Move to Archive"
+                              className="text-blue-600 hover:text-blue-700"
+                            >
+                              <Archive className="w-4 h-4 mr-1" />
+                              Archive
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </CardContent>
@@ -755,6 +839,72 @@ export default function CasesPage() {
             onCaseUpdate={fetchCases}
           />
         )}
+
+        {/* Close Case Dialog */}
+        <Dialog open={showCloseDialog} onOpenChange={setShowCloseDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Close Case</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to close this case? You can add notes about the closure.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="close-notes">Closure Notes (Optional)</Label>
+                <Textarea
+                  id="close-notes"
+                  placeholder="Enter any final notes or summary..."
+                  value={closeNotes}
+                  onChange={(e) => setCloseNotes(e.target.value)}
+                  rows={4}
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowCloseDialog(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleCloseCase} className="bg-orange-600 hover:bg-orange-700">
+                <XCircle className="w-4 h-4 mr-2" />
+                Close Case
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Archive Case Dialog */}
+        <Dialog open={showArchiveDialog} onOpenChange={setShowArchiveDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Archive Case</DialogTitle>
+              <DialogDescription>
+                Move this closed case to the archive. Archived cases are read-only.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="archive-notes">Archive Notes (Optional)</Label>
+                <Textarea
+                  id="archive-notes"
+                  placeholder="Enter any archive notes..."
+                  value={archiveNotes}
+                  onChange={(e) => setArchiveNotes(e.target.value)}
+                  rows={4}
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowArchiveDialog(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleArchiveCase} className="bg-blue-600 hover:bg-blue-700">
+                <Archive className="w-4 h-4 mr-2" />
+                Archive Case
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </ProtectedRoute>
   )
