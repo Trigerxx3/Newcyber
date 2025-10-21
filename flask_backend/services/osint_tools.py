@@ -33,48 +33,55 @@ class OSINTToolsService:
         logger.info(f"Sherlock path: {self.sherlock_path}")
         logger.info(f"Spiderfoot path: {self.spiderfoot_path}")
         
-    def run_sherlock(self, username: str, timeout: int = 120) -> Dict:
+    def run_sherlock(self, username: str, timeout: int = 60) -> Dict:
         """Run Sherlock to find username across social networks"""
         try:
             if not self.sherlock_path.exists():
                 # Try global sherlock command
                 try:
-                    cmd = ['sherlock', username, '--timeout', str(timeout), '--print-all']
+                    cmd = ['sherlock', username, '--timeout', '5', '--print-found']
                     logger.info(f"Running global Sherlock for username: {username}")
-                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout + 30)
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
                     
                     return self._parse_sherlock_output(result.stdout, username)
-                except:
+                except subprocess.TimeoutExpired:
+                    logger.warning(f"Sherlock timeout for username: {username}")
                     return {
-                        'error': 'Sherlock not found',
-                        'message': 'Sherlock is not installed or not in PATH'
+                        'status': 'timeout',
+                        'message': 'Sherlock investigation timed out. This is normal for large searches.'
+                    }
+                except FileNotFoundError:
+                    return {
+                        'status': 'not_installed',
+                        'message': 'Sherlock is not installed. Using fallback URL checking instead.'
                     }
             
-            # Use local sherlock installation
-            cmd = ['python3', str(self.sherlock_path), username, '--timeout', str(timeout), '--print-all']
+            # Use local sherlock installation with reasonable timeout per site
+            # Sherlock will scan all 300+ sites - this takes time but provides comprehensive results
+            cmd = ['python', str(self.sherlock_path), username, '--timeout', '10', '--print-found', '--no-color']
             
             logger.info(f"Running Sherlock for username: {username}")
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=timeout + 30,
+                timeout=timeout,
                 cwd=self.sherlock_path.parent
             )
             
             return self._parse_sherlock_output(result.stdout, username)
                 
         except subprocess.TimeoutExpired:
-            logger.error(f"Sherlock timeout for username: {username}")
+            logger.warning(f"Sherlock timeout for username: {username}")
             return {
-                'error': 'timeout',
-                'message': f'Sherlock timed out after {timeout} seconds'
+                'status': 'timeout',
+                'message': 'Sherlock investigation timed out. This is normal for large searches. Using fallback methods.'
             }
         except Exception as e:
             logger.error(f"Sherlock error: {e}")
             return {
-                'error': str(e),
-                'message': 'Failed to run Sherlock'
+                'status': 'error',
+                'message': f'Sherlock error: {str(e)}. Using fallback URL checking.'
             }
     
     def _parse_sherlock_output(self, output: str, username: str) -> Dict:
@@ -286,48 +293,76 @@ class OSINTToolsService:
             'timestamp': time.time(),
             'tools_used': [],
             'profiles_found': [],
-            'spiderfoot_findings': []
+            'spiderfoot_findings': [],
+            'tool_statuses': {}
         }
         
-        # Method 1: SpiderFoot scan (primary method)
-        logger.info("Starting SpiderFoot username scan...")
-        spiderfoot_results = self.run_spiderfoot_username_scan(username)
-        results['spiderfoot_results'] = spiderfoot_results
-        
-        if 'error' not in spiderfoot_results:
-            results['tools_used'].append('spiderfoot')
-            results['spiderfoot_findings'] = spiderfoot_results.get('findings', [])
-            
-            # Extract profiles from SpiderFoot findings
-            for finding in results['spiderfoot_findings']:
-                if finding.get('category') == 'social_media':
-                    profile_url = self._extract_url_from_finding(finding)
-                    if profile_url:
-                        results['profiles_found'].append({
-                            'platform': self._extract_platform_from_url(profile_url),
-                            'url': profile_url,
-                            'status': 'found',
-                            'source': 'spiderfoot',
-                            'confidence': finding.get('confidence', 'medium'),
-                            'module': finding.get('module', '')
-                        })
-        
-        # Method 2: Fallback URL checking
+        # Method 1: Fallback URL checking (ALWAYS run this first as it's most reliable)
         logger.info("Running fallback URL checks...")
-        fallback_results = self.investigate_username_fallback(username)
-        results['fallback_results'] = fallback_results
-        results['tools_used'].append('fallback_api')
-        results['profiles_found'].extend(fallback_results.get('profiles', []))
-        
-        # Method 3: Try Sherlock if available
         try:
-            sherlock_results = self.run_sherlock_investigation(username)
+            fallback_results = self.investigate_username_fallback(username)
+            results['fallback_results'] = fallback_results
+            results['tools_used'].append('fallback_api')
+            results['profiles_found'].extend(fallback_results.get('profiles', []))
+            results['tool_statuses']['fallback_api'] = 'success'
+        except Exception as e:
+            logger.error(f"Fallback API failed: {e}")
+            results['tool_statuses']['fallback_api'] = 'error'
+        
+        # Method 2: Try Sherlock if available (comprehensive scan of 300+ sites)
+        try:
+            logger.info("Starting Sherlock scan (this may take 30-60 seconds)...")
+            # Give Sherlock enough time to complete - it scans 300+ sites
+            sherlock_results = self.run_sherlock(username, timeout=60)  # 60 second max
             results['sherlock_results'] = sherlock_results
+            
             if sherlock_results.get('status') == 'success':
                 results['tools_used'].append('sherlock')
+                results['tool_statuses']['sherlock'] = 'success'
+                # Add Sherlock profiles
+                found_profiles = sherlock_results.get('found_profiles', [])
+                results['profiles_found'].extend(found_profiles)
+                logger.info(f"Sherlock found {len(found_profiles)} profiles")
+            elif sherlock_results.get('status') == 'timeout':
+                results['tool_statuses']['sherlock'] = 'timeout'
+                logger.info("Sherlock timed out after 5 seconds - using fallback results")
+            else:
+                results['tool_statuses']['sherlock'] = sherlock_results.get('status', 'error')
         except Exception as e:
             logger.warning(f"Sherlock failed: {e}")
-            results['sherlock_results'] = {'error': 'Sherlock not available'}
+            results['sherlock_results'] = {'status': 'error', 'message': str(e)}
+            results['tool_statuses']['sherlock'] = 'error'
+        
+        # Method 3: SpiderFoot scan (optional, may not be available)
+        try:
+            logger.info("Attempting SpiderFoot username scan...")
+            spiderfoot_results = self.run_spiderfoot_username_scan(username)
+            results['spiderfoot_results'] = spiderfoot_results
+            
+            if spiderfoot_results.get('status') == 'completed':
+                results['tools_used'].append('spiderfoot')
+                results['spiderfoot_findings'] = spiderfoot_results.get('findings', [])
+                results['tool_statuses']['spiderfoot'] = 'success'
+                
+                # Extract profiles from SpiderFoot findings
+                for finding in results['spiderfoot_findings']:
+                    if finding.get('category') == 'social_media':
+                        profile_url = self._extract_url_from_finding(finding)
+                        if profile_url:
+                            results['profiles_found'].append({
+                                'platform': self._extract_platform_from_url(profile_url),
+                                'url': profile_url,
+                                'status': 'found',
+                                'source': 'spiderfoot',
+                                'confidence': finding.get('confidence', 'medium'),
+                                'module': finding.get('module', '')
+                            })
+            else:
+                results['tool_statuses']['spiderfoot'] = 'unavailable'
+                logger.info("SpiderFoot not available - using fallback methods only")
+        except Exception as e:
+            logger.warning(f"SpiderFoot failed: {e}")
+            results['tool_statuses']['spiderfoot'] = 'error'
         
         # Generate comprehensive summary
         results['summary'] = self._generate_comprehensive_summary(results)

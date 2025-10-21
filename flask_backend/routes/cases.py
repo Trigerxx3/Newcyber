@@ -528,3 +528,42 @@ def can_create_case():
         
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@cases_bp.route('/<int:case_id>/archive', methods=['PUT'])
+@require_auth
+def archive_case(case_id):
+    """Archive a closed case"""
+    try:
+        data = request.get_json() or {}
+        notes = data.get('notes', '')
+        
+        # Get the case
+        case = Case.query.get(case_id)
+        if not case:
+            return jsonify({'status': 'error', 'message': 'Case not found'}), 404
+        
+        # Check if case is closed
+        if case.status not in [CaseStatus.CLOSED, CaseStatus.RESOLVED]:
+            return jsonify({
+                'status': 'error', 
+                'message': 'Only closed or resolved cases can be archived'
+            }), 400
+        
+        # Archive the case
+        case.status = CaseStatus.ARCHIVED
+        case.closed_date = case.closed_date or datetime.utcnow()
+        
+        if notes:
+            case.notes = (case.notes or '') + f"\n\n[ARCHIVED] {notes}"
+        
+        db.session.commit()
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Case archived successfully',
+            'data': case.to_dict()
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500

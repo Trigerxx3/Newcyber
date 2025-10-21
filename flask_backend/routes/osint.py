@@ -245,6 +245,26 @@ def investigate_user():
         
         if results['status'] == 'success':
             logger.info(f"Investigation completed for {username}. Found {len(results['data'].get('linkedProfiles', []))} profiles")
+            
+            # Track investigation activity
+            try:
+                from services.activity_tracker import activity_tracker
+                from flask_jwt_extended import get_jwt_identity
+                
+                # Get current user ID from JWT token
+                current_user_id = get_jwt_identity()
+                if current_user_id:
+                    activity_tracker.track_investigation_activity(
+                        user_id=current_user_id,
+                        username=username,
+                        platform=platform,
+                        investigation_results=results['data']
+                    )
+                    logger.info(f"Tracked investigation activity for user {current_user_id}")
+            except ImportError as e:
+                logger.warning(f"Activity tracker not available: {str(e)}")
+            except Exception as e:
+                logger.warning(f"Failed to track investigation activity: {str(e)}")
         
         return jsonify(results), 200 if results['status'] == 'success' else 500
         

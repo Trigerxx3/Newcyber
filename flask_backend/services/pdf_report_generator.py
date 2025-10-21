@@ -14,6 +14,16 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
 from datetime import datetime
 import os
 from io import BytesIO
+from typing import Dict, List, Optional, Any
+
+from extensions import db
+from models.case import Case
+from models.content import Content
+from models.osint_result import OSINTResult
+from models.user import User
+from models.user_case_link import UserCaseLink
+from models.source import Source
+from models.case_content_link import CaseContentLink
 
 class CaseReportGenerator:
     """Generate comprehensive PDF reports for cases"""
@@ -386,6 +396,50 @@ class CaseReportGenerator:
         ))
         
         return elements
+    
+    def _fetch_case_data(self, case_id: int) -> Optional[Dict[str, Any]]:
+        """Fetch all relevant data for a case"""
+        case = Case.query.get(case_id)
+        if not case:
+            return None
+        
+        # Get case users (analysts)
+        case_users = db.session.query(UserCaseLink, User).join(
+            User, UserCaseLink.user_id == User.id
+        ).filter(UserCaseLink.case_id == case_id).all()
+        
+        # Get flagged content linked to this case via CaseContentLink
+        flagged_content = (
+            db.session.query(Content)
+            .join(CaseContentLink, CaseContentLink.content_id == Content.id)
+            .filter(CaseContentLink.case_id == case_id, Content.is_flagged == True)
+            .all()
+        )
+        
+        # OSINT results: no direct link to case in current schema – derive none for now
+        osint_results = []
+        
+        # Derive platform users from content authors as a fallback (unique authors)
+        platform_users = []
+        
+        return {
+            'case': case,
+            'case_users': case_users,
+            'flagged_content': flagged_content,
+            'osint_results': osint_results,
+            'platform_users': platform_users
+        }
+    
+    def _get_platforms_analyzed(self, case_data: Dict[str, Any]) -> List[str]:
+        """Get list of platforms analyzed for this case"""
+        platforms = set()
+        
+        # Get platforms from flagged content
+        for content in case_data.get('flagged_content', []):
+            if content.source and content.source.platform:
+                platforms.add(content.source.platform.value)
+        
+        return list(platforms)
 
 
 # Convenience function

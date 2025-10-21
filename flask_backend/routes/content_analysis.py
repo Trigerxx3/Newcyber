@@ -12,6 +12,9 @@ from services.content_analysis import analyze_content
 from sqlalchemy.exc import SQLAlchemyError
 from datetime import datetime
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 content_analysis_bp = Blueprint('content_analysis', __name__)
 
@@ -140,6 +143,34 @@ def analyze_content_endpoint():
             db.session.commit()
             content_id = content.id
         
+        # Track content analysis activity
+        try:
+            from services.activity_tracker import activity_tracker
+            
+            # Prepare analysis results for activity tracking
+            analysis_results = {
+                'suspicion_score': analysis_result.suspicion_score,
+                'intent': analysis_result.intent,
+                'is_flagged': analysis_result.is_flagged,
+                'matched_keywords': analysis_result.matched_keywords,
+                'confidence': analysis_result.confidence,
+                'analysis_data': analysis_result.analysis_data
+            }
+            
+            activity_tracker.track_content_analysis_activity(
+                user_id=current_user.id,
+                content_text=content_text,
+                platform=platform,
+                username=username,
+                analysis_results=analysis_results,
+                content_id=content_id
+            )
+            logger.info(f"Tracked content analysis activity for user {current_user.id}")
+        except ImportError as e:
+            logger.warning(f"Activity tracker not available: {str(e)}")
+        except Exception as e:
+            logger.warning(f"Failed to track content analysis activity: {str(e)}")
+        
         # Prepare response
         response_data = {
             'status': 'success',
@@ -169,6 +200,145 @@ def analyze_content_endpoint():
         return jsonify({
             'status': 'error',
             'message': f'Analysis error: {str(e)}'
+        }), 500
+
+@content_analysis_bp.route('/analyze-batch', methods=['POST'])
+@require_auth
+def analyze_batch_content():
+    """
+    Analyze multiple content items in batch
+    
+    Expected JSON payload:
+    {
+        "platform": "Instagram",
+        "content_items": [
+            {
+                "username": "user1",
+                "content": "text content 1"
+            },
+            {
+                "username": "user2", 
+                "content": "text content 2"
+            }
+        ]
+    }
+    """
+    try:
+        data = request.get_json()
+        
+        if 'content_items' not in data or not data['content_items']:
+            return jsonify({
+                'status': 'error',
+                'message': 'Missing required field: content_items'
+            }), 400
+        
+        platform = data.get('platform', 'Unknown')
+        content_items = data['content_items']
+        
+        # Get current user
+        user_id = get_jwt_identity()
+        if not user_id:
+            return jsonify({
+                'status': 'error',
+                'message': 'User not authenticated'
+            }), 401
+        
+        current_user = SystemUser.query.get(int(user_id))
+        if not current_user:
+            return jsonify({
+                'status': 'error',
+                'message': 'User not found'
+            }), 404
+        
+        # Analyze each content item
+        results = []
+        flagged_count = 0
+        
+        for item in content_items:
+            try:
+                username = item.get('username', 'Anonymous')
+                content_text = item.get('content', '')
+                
+                if not content_text:
+                    continue
+                
+                # Analyze content
+                analysis_result = analyze_content(content_text)
+                
+                # Track individual content analysis
+                try:
+                    from services.activity_tracker import activity_tracker
+                    
+                    analysis_results = {
+                        'suspicion_score': analysis_result.suspicion_score,
+                        'intent': analysis_result.intent,
+                        'is_flagged': analysis_result.is_flagged,
+                        'matched_keywords': analysis_result.matched_keywords,
+                        'confidence': analysis_result.confidence,
+                        'analysis_data': analysis_result.analysis_data
+                    }
+                    
+                    activity_tracker.track_content_analysis_activity(
+                        user_id=current_user.id,
+                        content_text=content_text,
+                        platform=platform,
+                        username=username,
+                        analysis_results=analysis_results
+                    )
+                except ImportError as e:
+                    logger.warning(f"Activity tracker not available: {str(e)}")
+                except Exception as e:
+                    logger.warning(f"Failed to track individual content analysis: {str(e)}")
+                
+                if analysis_result.is_flagged:
+                    flagged_count += 1
+                
+                results.append({
+                    'username': username,
+                    'content': content_text,
+                    'suspicion_score': analysis_result.suspicion_score,
+                    'intent': analysis_result.intent,
+                    'is_flagged': analysis_result.is_flagged,
+                    'matched_keywords': analysis_result.matched_keywords
+                })
+                
+            except Exception as e:
+                logger.error(f"Error analyzing content item: {str(e)}")
+                continue
+        
+        # Track batch analysis activity
+        try:
+            from services.activity_tracker import activity_tracker
+            
+            batch_results = [{
+                'suspicion_score': r['suspicion_score'],
+                'is_flagged': r['is_flagged'],
+                'intent': r['intent']
+            } for r in results]
+            
+            activity_tracker.track_batch_analysis_activity(
+                user_id=current_user.id,
+                batch_results=batch_results,
+                platform=platform
+            )
+            logger.info(f"Tracked batch analysis activity for user {current_user.id}")
+        except ImportError as e:
+            logger.warning(f"Activity tracker not available: {str(e)}")
+        except Exception as e:
+            logger.warning(f"Failed to track batch analysis activity: {str(e)}")
+        
+        return jsonify({
+            'status': 'success',
+            'platform': platform,
+            'total_analyzed': len(results),
+            'flagged_count': flagged_count,
+            'results': results
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': f'Batch analysis error: {str(e)}'
         }), 500
 
 @content_analysis_bp.route('/flagged', methods=['GET'])

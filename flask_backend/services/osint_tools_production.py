@@ -214,6 +214,12 @@ class ProductionOSINTService:
         """Format results from local tools to match API format"""
         from .osint_handler import OSINTHandler
         
+        # Log tool statuses for debugging
+        logger.info(f"Tool statuses from investigation: {results.get('tool_statuses', {})}")
+        logger.info(f"Sherlock results status: {results.get('sherlock_results', {}).get('status')}")
+        logger.info(f"Spiderfoot results status: {results.get('spiderfoot_results', {}).get('status')}")
+        logger.info(f"Fallback results status: {results.get('fallback_results', {}).get('status')}")
+        
         handler = OSINTHandler()
         return handler._format_investigation_results(results, username)
 

@@ -319,3 +319,220 @@ def get_activities_summary(case_id):
     except Exception as e:
         return jsonify({'message': f'Error fetching summary: {str(e)}'}), 500
 
+
+@bp.route('/api/analysts/<int:analyst_id>/activities', methods=['GET'])
+# @jwt_required()  # Temporarily disabled for testing
+def get_analyst_activities(analyst_id):
+    """Get all activities for a specific analyst across all cases"""
+    try:
+        # Check if analyst exists
+        analyst = SystemUser.query.get(analyst_id)
+        if not analyst:
+            return jsonify({'message': 'Analyst not found'}), 404
+        
+        # Get query parameters
+        case_id = request.args.get('case_id')
+        activity_type = request.args.get('type')
+        include_in_report = request.args.get('include_in_report')
+        limit = request.args.get('limit', 50, type=int)
+        offset = request.args.get('offset', 0, type=int)
+        
+        # Build query
+        query = CaseActivity.query.filter_by(analyst_id=analyst_id)
+        
+        if case_id:
+            query = query.filter_by(case_id=case_id)
+        
+        if activity_type:
+            query = query.filter_by(activity_type=ActivityType(activity_type))
+        
+        if include_in_report is not None:
+            query = query.filter_by(include_in_report=include_in_report.lower() == 'true')
+        
+        # Order by date (most recent first) and paginate
+        activities = query.order_by(CaseActivity.activity_date.desc()).offset(offset).limit(limit).all()
+        
+        # Get total count for pagination
+        total_count = query.count()
+        
+        # Calculate summary statistics
+        all_activities = CaseActivity.query.filter_by(analyst_id=analyst_id).all()
+        total_time_spent = sum(a.time_spent_minutes for a in all_activities)
+        
+        # Count by type
+        by_type = {}
+        for activity in all_activities:
+            activity_type = activity.activity_type.value
+            by_type[activity_type] = by_type.get(activity_type, 0) + 1
+        
+        # Count by case
+        by_case = {}
+        for activity in all_activities:
+            case_title = activity.case.title if activity.case else 'Unknown Case'
+            by_case[case_title] = by_case.get(case_title, 0) + 1
+        
+        # Count report items
+        report_items = sum(1 for a in all_activities if a.include_in_report)
+        
+        summary = {
+            'total_activities': len(all_activities),
+            'total_time_spent_minutes': total_time_spent,
+            'total_time_spent_hours': round(total_time_spent / 60, 2),
+            'by_type': by_type,
+            'by_case': by_case,
+            'report_items_count': report_items
+        }
+        
+        return jsonify({
+            'activities': [activity.to_dict(include_relationships=True) for activity in activities],
+            'summary': summary,
+            'pagination': {
+                'total': total_count,
+                'limit': limit,
+                'offset': offset,
+                'has_more': offset + limit < total_count
+            }
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'message': f'Error fetching analyst activities: {str(e)}'}), 500
+
+
+@bp.route('/api/analysts/<int:analyst_id>/activities/summary', methods=['GET'])
+# @jwt_required()  # Temporarily disabled for testing
+def get_analyst_activities_summary(analyst_id):
+    """Get comprehensive summary of analyst activities and performance metrics"""
+    try:
+        # Check if analyst exists
+        analyst = SystemUser.query.get(analyst_id)
+        if not analyst:
+            return jsonify({'message': 'Analyst not found'}), 404
+        
+        # Get all activities for this analyst
+        activities = CaseActivity.query.filter_by(analyst_id=analyst_id).all()
+        
+        if not activities:
+            return jsonify({
+                'analyst': {
+                    'id': analyst.id,
+                    'username': analyst.username,
+                    'email': analyst.email,
+                    'role': analyst.role.value if analyst.role else 'Unknown'
+                },
+                'summary': {
+                    'total_activities': 0,
+                    'total_time_spent_minutes': 0,
+                    'total_time_spent_hours': 0,
+                    'by_type': {},
+                    'by_case': {},
+                    'by_month': {},
+                    'report_items_count': 0,
+                    'average_activity_duration': 0,
+                    'most_productive_day': None,
+                    'activity_trend': []
+                },
+                'performance_metrics': {
+                    'productivity_score': 0,
+                    'consistency_score': 0,
+                    'quality_score': 0,
+                    'collaboration_score': 0
+                }
+            }), 200
+        
+        # Calculate basic statistics
+        total_activities = len(activities)
+        total_time_spent = sum(a.time_spent_minutes for a in activities)
+        
+        # Count by type
+        by_type = {}
+        for activity in activities:
+            activity_type = activity.activity_type.value
+            by_type[activity_type] = by_type.get(activity_type, 0) + 1
+        
+        # Count by case
+        by_case = {}
+        for activity in activities:
+            case_title = activity.case.title if activity.case else 'Unknown Case'
+            by_case[case_title] = by_case.get(case_title, 0) + 1
+        
+        # Count by month (for trend analysis)
+        by_month = {}
+        for activity in activities:
+            month_key = activity.activity_date.strftime('%Y-%m')
+            by_month[month_key] = by_month.get(month_key, 0) + 1
+        
+        # Count report items
+        report_items = sum(1 for a in activities if a.include_in_report)
+        
+        # Calculate performance metrics
+        # Productivity: activities per day
+        if activities:
+            date_range = (max(a.activity_date for a in activities) - min(a.activity_date for a in activities)).days + 1
+            productivity_score = min(100, (total_activities / max(1, date_range)) * 10)
+        else:
+            productivity_score = 0
+        
+        # Consistency: regularity of activity
+        if len(by_month) > 1:
+            monthly_counts = list(by_month.values())
+            consistency_score = min(100, 100 - (max(monthly_counts) - min(monthly_counts)) / max(monthly_counts) * 100)
+        else:
+            consistency_score = 100
+        
+        # Quality: percentage of activities marked for reports
+        quality_score = (report_items / total_activities * 100) if total_activities > 0 else 0
+        
+        # Collaboration: working on multiple cases
+        collaboration_score = min(100, len(by_case) * 20) if by_case else 0
+        
+        # Activity trend (last 6 months)
+        activity_trend = []
+        from datetime import datetime, timedelta
+        for i in range(6):
+            month_date = datetime.now() - timedelta(days=30*i)
+            month_key = month_date.strftime('%Y-%m')
+            activity_trend.append({
+                'month': month_key,
+                'count': by_month.get(month_key, 0)
+            })
+        activity_trend.reverse()
+        
+        # Most productive day of week
+        by_day = {}
+        for activity in activities:
+            day = activity.activity_date.strftime('%A')
+            by_day[day] = by_day.get(day, 0) + 1
+        most_productive_day = max(by_day.items(), key=lambda x: x[1])[0] if by_day else None
+        
+        # Average activity duration
+        avg_duration = total_time_spent / total_activities if total_activities > 0 else 0
+        
+        return jsonify({
+            'analyst': {
+                'id': analyst.id,
+                'username': analyst.username,
+                'email': analyst.email,
+                'role': analyst.role.value if analyst.role else 'Unknown'
+            },
+            'summary': {
+                'total_activities': total_activities,
+                'total_time_spent_minutes': total_time_spent,
+                'total_time_spent_hours': round(total_time_spent / 60, 2),
+                'by_type': by_type,
+                'by_case': by_case,
+                'by_month': by_month,
+                'report_items_count': report_items,
+                'average_activity_duration': round(avg_duration, 1),
+                'most_productive_day': most_productive_day,
+                'activity_trend': activity_trend
+            },
+            'performance_metrics': {
+                'productivity_score': round(productivity_score, 1),
+                'consistency_score': round(consistency_score, 1),
+                'quality_score': round(quality_score, 1),
+                'collaboration_score': round(collaboration_score, 1)
+            }
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'message': f'Error fetching analyst summary: {str(e)}'}), 500

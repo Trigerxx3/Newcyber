@@ -21,6 +21,11 @@ class ActivityType(enum.Enum):
     OBSERVATION = "observation"  # Observation made
     RECOMMENDATION = "recommendation"  # Recommendation given
     DECISION = "decision"  # Decision made
+    INVESTIGATION = "investigation"  # User investigation activity
+    CONTENT_ANALYSIS = "content_analysis"  # Content analysis activity
+    OSINT_SEARCH = "osint_search"  # OSINT search activity
+    BATCH_ANALYSIS = "batch_analysis"  # Batch content analysis
+    PLATFORM_SCRAPING = "platform_scraping"  # Platform scraping activity
     OTHER = "other"  # Other activity
 
 class ActivityStatus(enum.Enum):

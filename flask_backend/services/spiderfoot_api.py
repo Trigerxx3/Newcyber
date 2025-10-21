@@ -15,9 +15,25 @@ class SpiderfootAPI:
     def __init__(self, base_url: str = "http://127.0.0.1:5001"):
         self.base_url = base_url
         self.session = requests.Session()
+        self.is_available = self._check_availability()
+        
+    def _check_availability(self) -> bool:
+        """Check if Spiderfoot server is available"""
+        try:
+            response = requests.get(f"{self.base_url}/", timeout=2)
+            return response.status_code == 200
+        except:
+            logger.warning(f"Spiderfoot server not available at {self.base_url}")
+            return False
         
     def start_scan(self, target: str, scan_type: str = "USERNAME", modules: List[str] = None) -> Dict:
         """Start a new scan"""
+        if not self.is_available:
+            return {
+                'status': 'error',
+                'message': 'Spiderfoot server is not running. Please start Spiderfoot on port 5001.'
+            }
+        
         if modules is None:
             modules = ['sfp_accounts', 'sfp_social', 'sfp_github']
         
@@ -104,9 +120,9 @@ def run_spiderfoot_via_api(username: str) -> Dict:
         scan_id = scan_result['scan_id']
         
         # Wait for scan to complete (with timeout)
-        max_wait = 60  # 1 minute
+        max_wait = 120  # 2 minutes - give Spiderfoot time to complete
         wait_time = 0
-        wait_interval = 2  # Check every 2 seconds
+        wait_interval = 3  # Check every 3 seconds
         
         while wait_time < max_wait:
             time.sleep(wait_interval)
@@ -130,7 +146,7 @@ def run_spiderfoot_via_api(username: str) -> Dict:
             'target': username,
             'status': 'timeout',
             'findings': [],
-            'error': 'Scan timed out after 1 minute'
+            'error': 'Scan timed out after 2 minutes'
         }
         
     except Exception as e:
