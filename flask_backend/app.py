@@ -14,11 +14,11 @@ def create_app(config_name='development'):
     
     # Configure CORS with comprehensive settings
     explicit_origins = [
-        'http://localhost:3000',
-        'http://127.0.0.1:3000',
-        'http://localhost:9002',
-        'http://127.0.0.1:9002',
-        'http://localhost:9003',
+             'http://localhost:3000',
+             'http://127.0.0.1:3000', 
+             'http://localhost:9002',
+             'http://127.0.0.1:9002',
+             'http://localhost:9003',
         'http://127.0.0.1:9003',
         # Known Vercel deployments
         'https://cyber-605eu5nyd-athul-s-projects.vercel.app',
@@ -54,15 +54,15 @@ def create_app(config_name='development'):
     if os.getenv('FLASK_ENV') != 'production':
         CORS(app,
              origins="*",
-             allow_headers=[
-                 'Content-Type',
-                 'Authorization',
-                 'X-Requested-With',
-                 'Accept',
-                 'Origin',
-                 'X-CSRF-Token'
-             ],
-             methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+         allow_headers=[
+             'Content-Type', 
+             'Authorization', 
+             'X-Requested-With',
+             'Accept',
+             'Origin',
+             'X-CSRF-Token'
+         ],
+         methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
              supports_credentials=True)
     else:
         # In production, don't use CORS extension - rely on after_request headers
@@ -133,39 +133,37 @@ def create_app(config_name='development'):
     except Exception as e:
         print(f"[WARNING] Could not initialize extensions: {e}")
     
-    # Ensure critical auxiliary tables exist (safe for dev; no-op if already migrated)
+    # Ensure all database tables exist (production-safe)
     try:
         from extensions import db
-        from sqlalchemy import inspect
-        from models.active_case import ActiveCase
         with app.app_context():
-            inspector = inspect(db.engine)
-            existing = set(inspector.get_table_names())
-            if 'active_cases' not in existing:
-                print('[INFO] Creating missing table: active_cases')
-                ActiveCase.__table__.create(db.engine, checkfirst=True)
+            # Create all tables if they don't exist
+            db.create_all()
+            print("✅ Database tables created/verified")
     except Exception as e:
-        print(f"[WARNING] Could not verify/create auxiliary tables: {e}")
+        print(f"⚠️  Could not create database tables: {e}")
     
-    # Development bootstrap: ensure a default admin exists
+    # Bootstrap: ensure a default admin exists (both dev and production)
     try:
         from extensions import db
         from models.user import SystemUser, SystemUserRole
-        env = app.config.get('ENV', 'development')
-        if env == 'development':
-            with app.app_context():
-                admin_email = 'admin@cyber.com'
-                admin = SystemUser.get_by_email(admin_email)
-                if not admin:
-                    admin = SystemUser(email=admin_email, username='admin', role=SystemUserRole.ADMIN)
-                    admin.set_password('admin123456')  # Set password before adding to session
-                    db.session.add(admin)
-                    db.session.commit()
-                else:
-                    # Reset password on each boot in dev for predictable creds
-                    admin.set_password('admin123456')
+        with app.app_context():
+            admin_email = 'admin@cyber.com'
+            admin = SystemUser.get_by_email(admin_email)
+            if not admin:
+                print("👤 Creating default admin user...")
+                admin = SystemUser(email=admin_email, username='admin', role=SystemUserRole.ADMIN)
+                admin.set_password('admin123456')
+                db.session.add(admin)
+                db.session.commit()
+                print("✅ Admin user created: admin@cyber.com / admin123456")
+            else:
+                # Ensure password is set correctly
+                admin.set_password('admin123456')
+                db.session.commit()
+                print("✅ Admin user verified: admin@cyber.com / admin123456")
     except Exception as e:
-        print(f"[WARNING] Bootstrap admin failed: {e}")
+        print(f"⚠️  Bootstrap admin failed: {e}")
     
     # Add global OPTIONS handler for CORS preflight requests
     @app.before_request
