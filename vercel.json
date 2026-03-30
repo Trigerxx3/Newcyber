@@ -1,0 +1,9 @@
+{
+  "buildCommand": "cd cyber && npm install && npm run build",
+  "outputDirectory": "cyber/.next",
+  "installCommand": "cd cyber && npm install",
+  "framework": "nextjs",
+  "env": {
+    "NEXT_PUBLIC_API_URL": "@next_public_api_url"
+  }
+}
