@@ -1,5 +1,0 @@
-{
-  "buildCommand": "cd cyber && npm install && npm run build",
-  "outputDirectory": "cyber/.next",
-  "installCommand": "cd cyber && npm install"
-}
