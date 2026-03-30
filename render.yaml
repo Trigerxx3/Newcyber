@@ -7,23 +7,17 @@ services:
     plan: free
     branch: master
     buildCommand: "cd flask_backend && pip install -r requirements.txt"
-    startCommand: "cd flask_backend && python run.py"
+    startCommand: "cd flask_backend && gunicorn 'app:create_app(\"production\")' --bind 0.0.0.0:$PORT --workers 2 --timeout 120"
     envVars:
       - key: FLASK_ENV
         value: production
+      - key: RENDER
+        value: "true"
       - key: SECRET_KEY
         generateValue: true
       - key: DATABASE_URL
-        fromDatabase:
-          name: narcotics-intel-db
-          property: connectionString
+        value: "postgresql://neondb_owner:npg_4fHz5eSvQXND@ep-tiny-morning-a41u62xn-pooler.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
       - key: PYTHON_VERSION
         value: 3.12.7
 
-  # PostgreSQL Database
-  - type: pgsql
-    name: narcotics-intel-db
-    region: oregon
-    plan: free
-    databaseName: narcotics_intel
-    databaseUser: narcotics_admin
+  # Database: Using Neon PostgreSQL (external) - see DATABASE_URL env var above
