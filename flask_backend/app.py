@@ -133,37 +133,38 @@ def create_app(config_name='development'):
     except Exception as e:
         print(f"[WARNING] Could not initialize extensions: {e}")
     
-    # Ensure all database tables exist (production-safe)
-    try:
-        from extensions import db
-        with app.app_context():
-            # Create all tables if they don't exist
+    # Ensure all database tables exist and bootstrap admin
+    # Done lazily via a first-request hook to avoid blocking gunicorn startup
+    _bootstrap_done = {'done': False}
+
+    @app.before_request
+    def _lazy_bootstrap():
+        if _bootstrap_done['done']:
+            return
+        _bootstrap_done['done'] = True
+        try:
+            from extensions import db
             db.create_all()
             print("[OK] Database tables created/verified")
-    except Exception as e:
-        print(f"[WARNING] Could not create database tables: {e}")
-    
-    # Bootstrap: ensure a default admin exists (both dev and production)
-    try:
-        from extensions import db
-        from models.user import SystemUser, SystemUserRole
-        with app.app_context():
+        except Exception as e:
+            print(f"[WARNING] Could not create database tables: {e}")
+        try:
+            from extensions import db
+            from models.user import SystemUser, SystemUserRole
             admin_email = 'admin@cyber.com'
             admin = SystemUser.get_by_email(admin_email)
             if not admin:
-                print("👤 Creating default admin user...")
                 admin = SystemUser(email=admin_email, username='admin', role=SystemUserRole.ADMIN)
                 admin.set_password('admin123456')
                 db.session.add(admin)
                 db.session.commit()
                 print("[OK] Admin user created: admin@cyber.com / admin123456")
             else:
-                # Ensure password is set correctly
                 admin.set_password('admin123456')
                 db.session.commit()
-                print("[OK] Admin user verified: admin@cyber.com / admin123456")
-    except Exception as e:
-        print(f"[WARNING] Bootstrap admin failed: {e}")
+                print("[OK] Admin user verified")
+        except Exception as e:
+            print(f"[WARNING] Bootstrap admin failed: {e}")
     
     # Add global OPTIONS handler for CORS preflight requests
     @app.before_request
