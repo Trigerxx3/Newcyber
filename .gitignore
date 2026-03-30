@@ -58,7 +58,7 @@ instance/
 # Python virtual environment
 bin/
 include/
-lib/
+/lib/
 share/
 pyvenv.cfg
 
