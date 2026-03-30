@@ -1,1 +1,1 @@
-web: gunicorn 'app:create_app("production")' --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+web: gunicorn wsgi:app --bind 0.0.0.0:${PORT:-10000} --workers 1 --timeout 300 --preload
