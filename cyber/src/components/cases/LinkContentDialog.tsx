@@ -42,6 +42,7 @@ interface ScrapedContent {
   timestamp: string
   scrapedAt?: string
   keywordMatches: string[]
+  keywords?: string[]
   sentiment?: number
   engagement?: {
     likes: number
@@ -59,6 +60,7 @@ interface ScrapedContent {
   is_analyzed?: boolean
   suspicion_score?: number
   intent?: string
+  [key: string]: unknown
 }
 
 interface LinkContentDialogProps {
@@ -102,12 +104,14 @@ export default function LinkContentDialog({
         response = await apiClient.getScrapedContent({ limit: 100 })
       }
       
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const responseAny = response as any
       if (response && Array.isArray(response)) {
         setContent(response)
         setFilteredContent(response)
-      } else if (response?.data && Array.isArray(response.data)) {
-        setContent(response.data)
-        setFilteredContent(response.data)
+      } else if (responseAny?.data && Array.isArray(responseAny.data)) {
+        setContent(responseAny.data)
+        setFilteredContent(responseAny.data)
       } else {
         setContent([])
         setFilteredContent([])

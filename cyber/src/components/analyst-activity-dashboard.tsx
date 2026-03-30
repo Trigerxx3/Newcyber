@@ -61,6 +61,7 @@ interface AnalystActivity {
   visibility_level: string
   created_at: string
   updated_at: string
+  analyst_name?: string
   analyst: {
     id: number
     username: string
@@ -71,6 +72,7 @@ interface AnalystActivity {
     title: string
     case_number: string
   }
+  metadata?: Record<string, unknown>
 }
 
 interface AnalystActivitySummary {
@@ -771,7 +773,7 @@ export default function AnalystActivityDashboard({
                   <div className="space-y-3">
                     <div>
                       <label className="text-sm font-medium text-muted-foreground">Analyst</label>
-                      <p className="text-sm text-foreground">{previewActivity.analyst_name}</p>
+                      <p className="text-sm text-foreground">{previewActivity.analyst?.username ?? 'Unknown'}</p>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-muted-foreground">Status</label>
