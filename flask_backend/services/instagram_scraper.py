@@ -470,11 +470,10 @@ class InstagramScraper:
         
         return users
 
-# Global scraper instance
-instagram_scraper = InstagramScraper()
+# Global scraper instance — disabled (Instagram IP blacklisted)
+# instagram_scraper = InstagramScraper()
+instagram_scraper = None
 
 def get_instagram_scraper():
     """Get the global Instagram scraper instance"""
-    if not instagram_scraper.api_client:
-        instagram_scraper.initialize()
-    return instagram_scraper
+    return None

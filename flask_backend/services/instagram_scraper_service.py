@@ -242,9 +242,9 @@ class InstagramScraperService:
         }
 
 
-# Global service instance
-instagram_service = InstagramScraperService()
+# Global service instance — disabled (Instagram IP blacklisted)
+# instagram_service = InstagramScraperService()
 
 def get_instagram_service():
     """Get the global Instagram service instance"""
-    return instagram_service
+    return None

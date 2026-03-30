@@ -290,12 +290,12 @@ class InstagramScraperDB:
         return []
 
 
-# Global instance
-instagram_scraper_db = InstagramScraperDB()
+# Global instance — disabled (Instagram IP blacklisted)
+# instagram_scraper_db = InstagramScraperDB()
 
 def get_instagram_scraper_db():
     """Get the global Instagram DB scraper instance"""
-    return instagram_scraper_db
+    return None
 
 
 
