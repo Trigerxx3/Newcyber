@@ -7,7 +7,7 @@ services:
     plan: free
     branch: master
     buildCommand: "cd flask_backend && pip install -r requirements.txt"
-    startCommand: "gunicorn wsgi:app --bind 0.0.0.0:${PORT:-10000} --workers 1 --timeout 300 --preload"
+    startCommand: "gunicorn wsgi:app --bind 0.0.0.0:${PORT:-10000} --workers 1 --timeout 300"
     envVars:
       - key: FLASK_ENV
         value: production
