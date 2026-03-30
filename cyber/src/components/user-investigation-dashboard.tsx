@@ -206,7 +206,7 @@ export function UserInvestigationDashboard() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4">
             <div className="space-y-2">
               <Label htmlFor="username">Username</Label>
               <Input
@@ -217,7 +217,7 @@ export function UserInvestigationDashboard() {
                 onKeyPress={(e) => e.key === 'Enter' && runInvestigation()}
               />
             </div>
-            <div className="space-y-2">
+            {/* <div className="space-y-2">
               <Label htmlFor="platform">Original Platform</Label>
               <Select value={platform} onValueChange={setPlatform}>
                 <SelectTrigger className="w-full">
@@ -230,7 +230,7 @@ export function UserInvestigationDashboard() {
                   <SelectItem value="Unknown">Unknown</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
+            </div> */}
           </div>
           
           <Button 

@@ -387,6 +387,45 @@ def export_scraping_data(data_type):
         return jsonify({'error': str(e)}), 500
 
 # Telegram-specific endpoints
+@scraping_bp.route('/telegram/status', methods=['GET'])
+@require_auth
+@require_role('Admin')
+def get_telegram_status():
+    """Get Telegram scraper status"""
+    try:
+        from services.telegram_scraper import get_telegram_scraper
+        import asyncio
+        
+        # Check if scraper is initialized
+        scraper = asyncio.run(get_telegram_scraper())
+        
+        if scraper.client:
+            return jsonify({
+                'status': 'connected',
+                'api_client_initialized': True,
+                'data_mode': 'real_api',
+                'message': 'Telegram API ready for scraping',
+                'session_file': scraper.session_file,
+                'api_configured': bool(scraper.api_id and scraper.api_hash)
+            })
+        else:
+            return jsonify({
+                'status': 'disconnected',
+                'api_client_initialized': False,
+                'data_mode': 'mock_data',
+                'message': 'Telegram API not configured - using mock data',
+                'setup_required': True
+            })
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'api_client_initialized': False,
+            'data_mode': 'mock_data',
+            'message': f'Error checking Telegram status: {str(e)}',
+            'setup_required': True
+        }), 500
+
 @scraping_bp.route('/telegram/channels', methods=['GET'])
 @require_auth
 @require_role('Admin')
@@ -444,10 +483,17 @@ def scrape_telegram_channel():
         except Exception:
             max_messages = 50
         
-        keywords = data.get('keywords') or []
+        keywords = (
+            data.get('keywords') or
+            request.form.get('keywords') or
+            request.args.get('keywords') or
+            []
+        )
         if isinstance(keywords, str):
             # allow comma-separated string
             keywords = [k.strip() for k in keywords.split(',') if k.strip()]
+        if isinstance(keywords, list):
+            keywords = [str(k).strip() for k in keywords if str(k).strip()]
         
         if not channel_id:
             return jsonify({'error': 'Channel ID is required (use channel_id or channel or username).'}), 400
@@ -458,6 +504,16 @@ def scrape_telegram_channel():
                 return jsonify({'error': 'Telegram scraper not available on server'}), 500
             web_scraper = TelegramWebScraper()
             messages = web_scraper.scrape_channel(channel_id, limit=max_messages)
+            if keywords:
+                filtered_messages = []
+                for message in messages:
+                    text_value = (message.get('text') or '')
+                    text_lower = text_value.lower()
+                    matched_keywords = [k for k in keywords if k.lower() in text_lower]
+                    if matched_keywords:
+                        message['matched_keywords'] = matched_keywords
+                        filtered_messages.append(message)
+                messages = filtered_messages
             scrape_result = { 'channel_title': channel_id, 'messages': messages }
         else:
             # Use asyncio to call async scraping methods, including getting the scraper
@@ -497,7 +553,7 @@ def scrape_telegram_channel():
                         text=message.get('text', ''),
                         author=message.get('author', 'Unknown'),
                         url=message.get('url', ''),
-                        keywords=keywords,
+                        keywords=message.get('matched_keywords', keywords if not keywords else []),
                         analysis_summary=f"Scraped from {channel_id} on {datetime.now().isoformat()}"
                     )
                     db.session.add(content)
@@ -520,6 +576,7 @@ def scrape_telegram_channel():
             'scraped_count': scraped_count,
             'saved_to_db': scraped_count,
             'total_messages': len(scrape_result.get('messages', [])),
+            'keywords_used': keywords,
             'message': f'Successfully scraped {scraped_count} messages from {channel_id}',
             'scrape_result': scrape_result
         })

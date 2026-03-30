@@ -55,6 +55,12 @@ structlog==23.1.0
 nltk==3.8.1
 textblob==0.17.1
 
+# ML models for content classification and risk scoring
+scikit-learn>=1.3.0
+joblib>=1.3.0
+torch>=2.2.0
+torchvision>=0.17.0
+
 # PDF generation for reports
 reportlab==4.0.4
 weasyprint==60.2

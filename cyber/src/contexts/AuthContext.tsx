@@ -182,9 +182,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const data = await apiClient.signUp(email, password, username, role)
       return { data, error: null }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Signup error:', error)
-      return { data: null, error }
+      console.error('Error data:', error?.data)
+      console.error('Error message:', error?.message)
+      // Extract the actual error message from the backend response
+      const errorMessage = error?.data?.error || error?.message || 'Sign up failed'
+      console.error('Extracted error message:', errorMessage)
+      return { data: null, error: { message: errorMessage } }
     }
   }
 

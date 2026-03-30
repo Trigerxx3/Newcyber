@@ -58,6 +58,12 @@ class Content(BaseModel):
     intent = db.Column(db.String(50), default='Unknown')  # Detected intent (Selling, Buying, Informational, Unknown)
     is_flagged = db.Column(db.Boolean, default=False)  # Whether content is flagged for review
     
+    # ML-based Analysis Results
+    ml_prediction = db.Column(db.String(50))  # ML prediction: "Drug-Related" | "Non-Drug-Related"
+    ml_confidence = db.Column(db.Float)  # ML confidence score (0-1)
+    risk_score = db.Column(db.Integer)  # ML-based risk score (0-100)
+    risk_level_ml = db.Column(db.String(20))  # ML-based risk level: "High" | "Medium" | "Low"
+    
     # Metadata
     language = db.Column(db.String(10), default='en')
     word_count = db.Column(db.Integer)
@@ -107,6 +113,10 @@ class Content(BaseModel):
             'processing_time': self.processing_time,
             'analysis_version': self.analysis_version,
             'last_analyzed': self.last_analyzed.isoformat() if self.last_analyzed else None,
+            'ml_prediction': self.ml_prediction,
+            'ml_confidence': self.ml_confidence,
+            'risk_score': self.risk_score,
+            'risk_level_ml': self.risk_level_ml,
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat()
         }

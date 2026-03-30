@@ -4,7 +4,7 @@ import * as React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
-import { Bot, FileText, Instagram, Loader2, MessageSquare, Send, ShieldAlert, Database, Search, RefreshCw, CheckCircle, Clock, Filter } from "lucide-react";
+import { Bot, FileText, Instagram, Loader2, MessageSquare, Send, ShieldAlert, Database, Search, RefreshCw, CheckCircle, Clock, Filter, Link, TrendingUp, BarChart3, PieChart } from "lucide-react";
 
 import { apiClient } from "@/lib/api";
 
@@ -23,6 +23,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useActiveCase } from "@/contexts/ActiveCaseContext";
+import { PieChart as RechartsPieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from "recharts";
 
 const contentFormSchema = z.object({
   platform: z.enum(["Instagram", "Telegram", "WhatsApp", "Facebook", "Twitter", "TikTok"]).optional(),
@@ -51,6 +53,12 @@ interface AnalysisResult {
     word_count: number;
     sentence_count: number;
   };
+  // ML-based results
+  ml_prediction?: string; // "Drug-Related" | "Non-Drug-Related"
+  ml_confidence?: number; // 0-1
+  risk_score?: number; // 0-100
+  risk_level?: string; // "High" | "Medium" | "Low"
+  keywords?: string[]; // Alias for matched_keywords
   content_id: number | null;
   processing_time: number;
   saved_to_database: boolean;
@@ -68,6 +76,11 @@ interface ScrapedContent {
   keywords?: string[];
   analysis_summary?: string;
   is_analyzed?: boolean;
+  ml_prediction?: string;
+  ml_confidence?: number;
+  risk_score?: number;
+  risk_level_ml?: string;
+  suspicion_score?: number;
 }
 
 interface ScrapedContentFilters {
@@ -76,14 +89,22 @@ interface ScrapedContentFilters {
   status?: string;
   search_term?: string;
   analyzed_only?: boolean;
+  risk_level_ml?: string; // Filter by ML risk level
+  sort_by?: 'risk_score' | 'ml_confidence' | 'date'; // Sort options
+  sort_order?: 'asc' | 'desc';
 }
 
 export function ContentAnalysis() {
   const { toast } = useToast();
+  const { activeCase } = useActiveCase();
   
   const [isContentLoading, setIsContentLoading] = React.useState(false);
   const [analysisResult, setAnalysisResult] = React.useState<AnalysisResult | null>(null);
   const [saveContent, setSaveContent] = React.useState(false);
+  const [showCaseLinkingDialog, setShowCaseLinkingDialog] = React.useState(false);
+  const [availableCases, setAvailableCases] = React.useState<any[]>([]);
+  const [selectedCaseId, setSelectedCaseId] = React.useState<number | null>(null);
+  const [isLinkingContent, setIsLinkingContent] = React.useState(false);
   
   // Scraped content state
   const [scrapedContent, setScrapedContent] = React.useState<ScrapedContent[]>([]);
@@ -121,10 +142,19 @@ export function ContentAnalysis() {
       if (response.status === 'success') {
         setAnalysisResult(response);
         
-        toast({
-          title: "Analysis Complete",
-          description: `Content analyzed with ${response.suspicion_score}% suspicion score. ${response.saved_to_database ? 'Results saved to database.' : 'Results not saved to database.'}`,
-        });
+        // If content is flagged and not saved, suggest saving it
+        if (response.is_flagged && !response.saved_to_database) {
+          toast({
+            title: "Flagged Content Detected",
+            description: `Content flagged with ${response.suspicion_score}% suspicion score. Consider saving to database for case linking.`,
+            duration: 5000,
+          });
+        } else {
+          toast({
+            title: "Analysis Complete",
+            description: `Content analyzed with ${response.suspicion_score}% suspicion score. ${response.saved_to_database ? 'Results saved to database.' : 'Results not saved to database.'}`,
+          });
+        }
       } else {
         throw new Error(response.message || 'Analysis failed');
       }
@@ -290,11 +320,12 @@ export function ContentAnalysis() {
     }
   };
 
-  // Filter scraped content based on current filters
+  // Filter and sort scraped content based on current filters
   const filteredScrapedContent = React.useMemo(() => {
-    return scrapedContent.filter(content => {
+    let filtered = scrapedContent.filter(content => {
       if (filters.platform && content.platform !== filters.platform) return false;
       if (filters.risk_level && content.risk_level !== filters.risk_level) return false;
+      if (filters.risk_level_ml && content.risk_level_ml && content.risk_level_ml !== filters.risk_level_ml) return false;
       if (filters.status && content.status !== filters.status) return false;
       if (filters.analyzed_only && !content.is_analyzed) return false;
       if (filters.search_term) {
@@ -307,7 +338,96 @@ export function ContentAnalysis() {
       }
       return true;
     });
+    
+    // Sort
+    if (filters.sort_by) {
+      filtered.sort((a, b) => {
+        let aVal: any = 0;
+        let bVal: any = 0;
+        
+        if (filters.sort_by === 'risk_score') {
+          aVal = a.risk_score || a.suspicion_score || 0;
+          bVal = b.risk_score || b.suspicion_score || 0;
+        } else if (filters.sort_by === 'ml_confidence') {
+          aVal = a.ml_confidence || 0;
+          bVal = b.ml_confidence || 0;
+        } else if (filters.sort_by === 'date') {
+          aVal = new Date(a.posted_at).getTime();
+          bVal = new Date(b.posted_at).getTime();
+        }
+        
+        if (filters.sort_order === 'asc') {
+          return aVal - bVal;
+        } else {
+          return bVal - aVal;
+        }
+      });
+    }
+    
+    return filtered;
   }, [scrapedContent, filters]);
+
+  // Load available cases for linking
+  const loadAvailableCases = async () => {
+    try {
+      const response = await apiClient.getCases();
+      if (response && Array.isArray(response)) {
+        setAvailableCases(response);
+      } else {
+        setAvailableCases([]);
+      }
+    } catch (error: any) {
+      console.error("Failed to load cases:", error);
+      toast({
+        variant: "destructive",
+        title: "Failed to Load Cases",
+        description: "Could not load available cases for linking.",
+      });
+    }
+  };
+
+  // Handle case linking
+  const handleLinkToCase = async () => {
+    if (!analysisResult || !analysisResult.content_id) {
+      toast({
+        variant: "destructive",
+        title: "No Content to Link",
+        description: "Content must be saved to database before linking to a case.",
+      });
+      return;
+    }
+
+    if (!selectedCaseId) {
+      toast({
+        variant: "destructive",
+        title: "No Case Selected",
+        description: "Please select a case to link the content to.",
+      });
+      return;
+    }
+
+    setIsLinkingContent(true);
+    try {
+      await apiClient.linkContentToCase(selectedCaseId, [analysisResult.content_id]);
+      
+      toast({
+        title: "Content Linked Successfully",
+        description: `Content has been linked to case and will be included in reports.`,
+      });
+      
+      setShowCaseLinkingDialog(false);
+      setSelectedCaseId(null);
+    } catch (error: any) {
+      console.error("Failed to link content to case:", error);
+      toast({
+        variant: "destructive",
+        title: "Linking Failed",
+        description: error.message || "Failed to link content to case. Please try again.",
+      });
+    } finally {
+      setIsLinkingContent(false);
+    }
+  };
 
   // Load scraped content on component mount
   React.useEffect(() => {
@@ -391,6 +511,34 @@ export function ContentAnalysis() {
                 </Select>
               </div>
               <div>
+                <label className="text-sm font-medium">ML Risk Level</label>
+                <Select value={filters.risk_level_ml || ""} onValueChange={(value) => setFilters(prev => ({ ...prev, risk_level_ml: value || undefined }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All ML risk levels" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All ML risk levels</SelectItem>
+                    <SelectItem value="Low">Low</SelectItem>
+                    <SelectItem value="Medium">Medium</SelectItem>
+                    <SelectItem value="High">High</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Sort By</label>
+                <Select value={filters.sort_by || ""} onValueChange={(value) => setFilters(prev => ({ ...prev, sort_by: value as any || undefined }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Default" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Default</SelectItem>
+                    <SelectItem value="risk_score">Risk Score (Descending)</SelectItem>
+                    <SelectItem value="ml_confidence">ML Confidence (Descending)</SelectItem>
+                    <SelectItem value="date">Date (Newest First)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
                 <label className="text-sm font-medium">Status</label>
                 <Select value={filters.status || ""} onValueChange={(value) => setFilters(prev => ({ ...prev, status: value || undefined }))}>
                   <SelectTrigger>
@@ -469,13 +617,32 @@ export function ContentAnalysis() {
                       </Badge>
                     )}
                   </div>
-                  <Badge variant={
-                    content.risk_level === 'Critical' ? 'destructive' :
-                    content.risk_level === 'High' ? 'destructive' :
-                    content.risk_level === 'Medium' ? 'default' : 'secondary'
-                  }>
-                    {content.risk_level}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={
+                      content.risk_level === 'Critical' ? 'destructive' :
+                      content.risk_level === 'High' ? 'destructive' :
+                      content.risk_level === 'Medium' ? 'default' : 'secondary'
+                    }>
+                      {content.risk_level}
+                    </Badge>
+                    {content.risk_level_ml && (
+                      <Badge 
+                        variant="outline"
+                        className={
+                          content.risk_level_ml === 'High' ? 'border-red-500 text-red-700' :
+                          content.risk_level_ml === 'Medium' ? 'border-orange-500 text-orange-700' :
+                          'border-green-500 text-green-700'
+                        }
+                      >
+                        ML: {content.risk_level_ml}
+                      </Badge>
+                    )}
+                    {content.risk_score !== undefined && (
+                      <Badge variant="outline" className="text-xs">
+                        Risk: {content.risk_score}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
                 <p className="text-sm text-muted-foreground line-clamp-2">
                   {content.text}
@@ -497,6 +664,180 @@ export function ContentAnalysis() {
             Showing {filteredScrapedContent.length} of {scrapedContent.length} content items
           </div>
         )}
+      </div>
+    );
+  };
+
+  // Calculate analytics data for charts
+  const calculateAnalyticsData = () => {
+    const riskDistribution = {
+      High: 0,
+      Medium: 0,
+      Low: 0
+    };
+    
+    const platformRisk: Record<string, { High: number; Medium: number; Low: number }> = {};
+    const riskTrend: { date: string; High: number; Medium: number; Low: number }[] = [];
+    
+    scrapedContent.forEach(content => {
+      const riskLevel = content.risk_level_ml || content.risk_level || 'Low';
+      if (riskLevel === 'High' || riskLevel === 'CRITICAL') {
+        riskDistribution.High++;
+      } else if (riskLevel === 'Medium' || riskLevel === 'MEDIUM') {
+        riskDistribution.Medium++;
+      } else {
+        riskDistribution.Low++;
+      }
+      
+      // Platform vs Risk
+      const platform = content.platform || 'Unknown';
+      if (!platformRisk[platform]) {
+        platformRisk[platform] = { High: 0, Medium: 0, Low: 0 };
+      }
+      if (riskLevel === 'High' || riskLevel === 'CRITICAL') {
+        platformRisk[platform].High++;
+      } else if (riskLevel === 'Medium' || riskLevel === 'MEDIUM') {
+        platformRisk[platform].Medium++;
+      } else {
+        platformRisk[platform].Low++;
+      }
+    });
+    
+    // Risk trend (last 7 days)
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
+      const date = new Date();
+      date.setDate(date.getDate() - (6 - i));
+      return date.toISOString().split('T')[0];
+    });
+    
+    last7Days.forEach(date => {
+      const dayContent = scrapedContent.filter(c => {
+        const contentDate = new Date(c.posted_at).toISOString().split('T')[0];
+        return contentDate === date;
+      });
+      
+      const dayRisk = { date, High: 0, Medium: 0, Low: 0 };
+      dayContent.forEach(c => {
+        const riskLevel = c.risk_level_ml || c.risk_level || 'Low';
+        if (riskLevel === 'High' || riskLevel === 'CRITICAL') {
+          dayRisk.High++;
+        } else if (riskLevel === 'Medium' || riskLevel === 'MEDIUM') {
+          dayRisk.Medium++;
+        } else {
+          dayRisk.Low++;
+        }
+      });
+      riskTrend.push(dayRisk);
+    });
+    
+    return { riskDistribution, platformRisk, riskTrend };
+  };
+
+  // Render analytics dashboard
+  const renderAnalyticsDashboard = () => {
+    const { riskDistribution, platformRisk, riskTrend } = calculateAnalyticsData();
+    
+    // Prepare pie chart data
+    const pieData = [
+      { name: 'High Risk', value: riskDistribution.High, color: '#ef4444' },
+      { name: 'Medium Risk', value: riskDistribution.Medium, color: '#f59e0b' },
+      { name: 'Low Risk', value: riskDistribution.Low, color: '#10b981' }
+    ];
+    
+    // Prepare bar chart data
+    const barData = Object.entries(platformRisk).map(([platform, risks]) => ({
+      platform,
+      High: risks.High,
+      Medium: risks.Medium,
+      Low: risks.Low
+    }));
+    
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Risk Distribution Pie Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <PieChart className="h-5 w-5" />
+                Risk Distribution
+              </CardTitle>
+              <CardDescription>Distribution of content by risk level</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <RechartsPieChart>
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {pieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </RechartsPieChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          {/* Platform vs Risk Bar Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BarChart3 className="h-5 w-5" />
+                Platform vs Risk
+              </CardTitle>
+              <CardDescription>Risk distribution across platforms</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={barData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="platform" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="High" stackId="a" fill="#ef4444" />
+                  <Bar dataKey="Medium" stackId="a" fill="#f59e0b" />
+                  <Bar dataKey="Low" stackId="a" fill="#10b981" />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Risk Trend Line Chart */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5" />
+              Risk Trend Over Time
+            </CardTitle>
+            <CardDescription>Risk level trends over the last 7 days</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={riskTrend}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Line type="monotone" dataKey="High" stroke="#ef4444" strokeWidth={2} />
+                <Line type="monotone" dataKey="Medium" stroke="#f59e0b" strokeWidth={2} />
+                <Line type="monotone" dataKey="Low" stroke="#10b981" strokeWidth={2} />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
       </div>
     );
   };
@@ -613,30 +954,111 @@ export function ContentAnalysis() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <div className="text-3xl font-bold" style={{ color: analysisResult.suspicion_score >= 70 ? '#ef4444' : analysisResult.suspicion_score >= 40 ? '#f59e0b' : '#10b981' }}>
+                <div className="text-2xl font-bold" style={{ color: analysisResult.suspicion_score >= 70 ? '#ef4444' : analysisResult.suspicion_score >= 40 ? '#f59e0b' : '#10b981' }}>
                   {analysisResult.suspicion_score}%
                 </div>
-                <div className="text-sm text-muted-foreground">Suspicion Score</div>
+                <div className="text-sm text-muted-foreground">Keyword Score</div>
               </div>
+              {analysisResult.risk_score !== undefined && (
+                <div>
+                  <div className="text-2xl font-bold" style={{ 
+                    color: analysisResult.risk_score >= 71 ? '#ef4444' : 
+                           analysisResult.risk_score >= 41 ? '#f59e0b' : '#10b981' 
+                  }}>
+                    {analysisResult.risk_score}%
+                  </div>
+                  <div className="text-sm text-muted-foreground">ML Risk Score</div>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-between">
               <Badge variant={analysisResult.is_flagged ? "destructive" : "secondary"}>
                 {analysisResult.is_flagged ? "FLAGGED" : "CLEAN"}
               </Badge>
+              {analysisResult.risk_level && (
+                <Badge 
+                  variant={analysisResult.risk_level === "High" ? "destructive" : 
+                           analysisResult.risk_level === "Medium" ? "default" : "secondary"}
+                  className={
+                    analysisResult.risk_level === "High" ? "bg-red-500" :
+                    analysisResult.risk_level === "Medium" ? "bg-orange-500" : "bg-green-500"
+                  }
+                >
+                  {analysisResult.risk_level} Risk
+                </Badge>
+              )}
             </div>
               <Separator />
-            <div>
-              <h4 className="font-semibold mb-2">Detected Intent</h4>
-              <Badge variant="outline" className="text-lg px-3 py-1">
-                {analysisResult.intent}
-              </Badge>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <h4 className="font-semibold mb-2">Detected Intent</h4>
+                <Badge variant="outline" className="text-lg px-3 py-1">
+                  {analysisResult.intent}
+                </Badge>
+              </div>
+              {analysisResult.ml_prediction && (
+                <div>
+                  <h4 className="font-semibold mb-2">ML Prediction</h4>
+                  <Badge 
+                    variant={analysisResult.ml_prediction === "Drug-Related" ? "destructive" : "secondary"}
+                    className="text-lg px-3 py-1"
+                  >
+                    {analysisResult.ml_prediction}
+                  </Badge>
+                </div>
+              )}
             </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <h4 className="font-semibold mb-2">Keyword Confidence</h4>
+                <div className="text-lg font-semibold" style={{ color: analysisResult.confidence >= 0.8 ? '#10b981' : analysisResult.confidence >= 0.6 ? '#f59e0b' : '#6b7280' }}>
+                  {(analysisResult.confidence * 100).toFixed(0)}%
+                </div>
+              </div>
+              {analysisResult.ml_confidence !== undefined && (
+                <div>
+                  <h4 className="font-semibold mb-2">ML Confidence</h4>
+                  <div className="text-lg font-semibold" style={{ 
+                    color: analysisResult.ml_confidence >= 0.8 ? '#10b981' : 
+                           analysisResult.ml_confidence >= 0.6 ? '#f59e0b' : '#6b7280' 
+                  }}>
+                    {(analysisResult.ml_confidence * 100).toFixed(0)}%
+                  </div>
+                </div>
+              )}
+            </div>
+            {analysisResult.risk_score !== undefined && (
+              <div>
+                <div className="flex justify-between text-sm mb-2">
+                  <span>Risk Score</span>
+                  <span>{analysisResult.risk_score}/100</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2.5">
+                  <div 
+                    className={`h-2.5 rounded-full ${
+                      analysisResult.risk_score >= 71 ? 'bg-red-500' :
+                      analysisResult.risk_score >= 41 ? 'bg-orange-500' : 'bg-green-500'
+                    }`}
+                    style={{ width: `${analysisResult.risk_score}%` }}
+                  ></div>
+                </div>
+              </div>
+            )}
+            <Separator />
             <div>
-              <h4 className="font-semibold mb-2">Confidence Level</h4>
-              <div className="text-lg font-semibold" style={{ color: analysisResult.confidence >= 0.8 ? '#10b981' : analysisResult.confidence >= 0.6 ? '#f59e0b' : '#6b7280' }}>
-                {(analysisResult.confidence * 100).toFixed(0)}%
+              <h4 className="font-semibold mb-2">Analyzed Content</h4>
+              <div className="rounded-md border bg-muted/40 p-3 space-y-2">
+                <div className="text-xs text-muted-foreground flex items-center gap-2">
+                  <Badge variant="outline" className="text-xs">{analysisResult.platform || "Unknown"}</Badge>
+                  <span>@{analysisResult.username || "Anonymous"}</span>
+                </div>
+                <p className="text-sm whitespace-pre-wrap break-words">
+                  {analysisResult.text || "No content available"}
+                </p>
               </div>
-              </div>
+            </div>
             </CardContent>
           </Card>
 
@@ -727,25 +1149,32 @@ export function ContentAnalysis() {
         </div>
 
         {/* Case Linking Button */}
-        {analysisResult.is_flagged && (
+        {(analysisResult.is_flagged || analysisResult.risk_level === "High") && (
           <Card className="border-red-200 bg-red-50">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="font-semibold text-red-800">Flagged Content Detected</h4>
+                  <h4 className="font-semibold text-red-800">High Risk Content Detected</h4>
                   <p className="text-sm text-red-600 mt-1">
-                    This content has been flagged for review due to high suspicion score.
+                    {analysisResult.risk_level === "High" 
+                      ? `This content has a high ML risk score (${analysisResult.risk_score}%) and requires immediate attention.`
+                      : "This content has been flagged for review due to high suspicion score."}
                   </p>
                 </div>
                 <div className="flex gap-2">
                   <Button 
                     variant="destructive"
                     onClick={() => {
-                      // TODO: Implement case linking functionality
-                      toast({
-                        title: "Case Linking",
-                        description: "Case linking functionality will be implemented next.",
-                      });
+                      if (!analysisResult.saved_to_database) {
+                        toast({
+                          variant: "destructive",
+                          title: "Content Not Saved",
+                          description: "Please save the content to database first before linking to a case.",
+                        });
+                        return;
+                      }
+                      loadAvailableCases();
+                      setShowCaseLinkingDialog(true);
                     }}
                   >
                     Link to Case
@@ -800,7 +1229,7 @@ export function ContentAnalysis() {
       </div>
 
       <Tabs defaultValue="manual" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="manual" className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
             Manual Analysis
@@ -808,6 +1237,10 @@ export function ContentAnalysis() {
           <TabsTrigger value="scraped" className="flex items-center gap-2">
             <Database className="h-4 w-4" />
             Scraped Content Pipeline
+          </TabsTrigger>
+          <TabsTrigger value="dashboard" className="flex items-center gap-2">
+            <BarChart3 className="h-4 w-4" />
+            Analytics Dashboard
           </TabsTrigger>
         </TabsList>
 
@@ -1034,7 +1467,93 @@ export function ContentAnalysis() {
             </div>
           </div>
         </TabsContent>
+
+        {/* Analytics Dashboard Tab */}
+        <TabsContent value="dashboard" className="space-y-6">
+          {renderAnalyticsDashboard()}
+        </TabsContent>
       </Tabs>
+
+      {/* Case Linking Dialog */}
+      <Dialog open={showCaseLinkingDialog} onOpenChange={setShowCaseLinkingDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Link Content to Case</DialogTitle>
+            <DialogDescription>
+              Select a case to link this flagged content to. The content will be included in case reports.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium mb-2 block">Select Case</label>
+              <Select value={selectedCaseId?.toString() || ""} onValueChange={(value) => setSelectedCaseId(parseInt(value))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a case..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableCases.map((caseItem) => (
+                    <SelectItem key={caseItem.id} value={caseItem.id.toString()}>
+                      <div className="flex items-center justify-between w-full">
+                        <span>{caseItem.title}</span>
+                        <Badge variant="outline" className="ml-2">
+                          {caseItem.status}
+                        </Badge>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {activeCase && (
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <div className="flex items-center gap-2 text-sm text-blue-800">
+                  <CheckCircle className="h-4 w-4" />
+                  <span>Active Case: {activeCase.title}</span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  onClick={() => setSelectedCaseId(activeCase.id)}
+                >
+                  Use Active Case
+                </Button>
+              </div>
+            )}
+          </div>
+          
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowCaseLinkingDialog(false);
+                setSelectedCaseId(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleLinkToCase}
+              disabled={!selectedCaseId || isLinkingContent}
+              className="bg-primary hover:bg-primary/90"
+            >
+              {isLinkingContent ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Linking...
+                </>
+              ) : (
+                <>
+                  <Link className="mr-2 h-4 w-4" />
+                  Link to Case
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

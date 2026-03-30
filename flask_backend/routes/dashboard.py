@@ -3,7 +3,7 @@ from models.content import Content
 from models.source import Source
 from models.osint_result import OSINTResult
 from extensions import db
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from datetime import datetime, timedelta
 
 dashboard_bp = Blueprint('dashboard', __name__)
@@ -96,13 +96,26 @@ def get_recent_content():
     try:
         limit = request.args.get('limit', 10, type=int)
         
-        recent_content = Content.query.order_by(
+        # Join with Source to get platform information
+        recent_content = Content.query.join(Source).order_by(
             Content.created_at.desc()
         ).limit(limit).all()
         
+        # Enhance content data with source information
+        content_data = []
+        for content in recent_content:
+            content_dict = content.to_dict()
+            if content.source:
+                content_dict['source'] = {
+                    'platform': content.source.platform.value if content.source.platform else None,
+                    'source_handle': content.source.source_handle,
+                    'source_name': content.source.source_name
+                }
+            content_data.append(content_dict)
+        
         return jsonify({
             'status': 'success',
-            'data': [content.to_dict() for content in recent_content]
+            'data': content_data
         }), 200
     except Exception as e:
         return jsonify({
@@ -112,13 +125,25 @@ def get_recent_content():
 
 @dashboard_bp.route('/high-risk-content', methods=['GET'])
 def get_high_risk_content():
-    """Get high-risk content"""
+    """Get high-risk content (includes both keyword-based and ML-based high risk)"""
     try:
+        from sqlalchemy import or_
         limit = request.args.get('limit', 10, type=int)
         
+        # Get high-risk content from both keyword-based and ML-based analysis
         high_risk_content = Content.query.filter(
-            Content.risk_level.in_(['high', 'critical'])
-        ).order_by(Content.created_at.desc()).limit(limit).all()
+            or_(
+                # Keyword-based high risk
+                Content.risk_level.in_(['HIGH', 'CRITICAL']),
+                # ML-based high risk
+                Content.risk_level_ml == 'High',
+                # High risk score (>= 71)
+                Content.risk_score >= 71
+            )
+        ).order_by(
+            Content.risk_score.desc().nullslast(),
+            Content.created_at.desc()
+        ).limit(limit).all()
         
         return jsonify({
             'status': 'success',

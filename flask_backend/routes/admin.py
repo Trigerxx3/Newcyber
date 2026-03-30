@@ -145,6 +145,35 @@ def get_system_users():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@admin_bp.route('/users/<int:user_id>/toggle-active', methods=['POST'])
+@require_auth
+@require_role('Admin')
+def toggle_system_user_active(user_id):
+    """Toggle system user active status"""
+    try:
+        user = SystemUser.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        # Toggle the active status
+        user.is_active = not user.is_active
+        db.session.commit()
+        
+        return jsonify({
+            'message': f'User {user.username} is now {"active" if user.is_active else "inactive"}',
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'is_active': user.is_active,
+                'role': user.role.value if hasattr(user.role, 'value') else str(user.role)
+            }
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
 @admin_bp.route('/sources', methods=['GET', 'POST'])
 @require_auth
 @require_role('Admin')

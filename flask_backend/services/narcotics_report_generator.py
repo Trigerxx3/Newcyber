@@ -89,7 +89,11 @@ class NarcoticsReportGenerator:
             parent=self.styles['Normal'],
             fontSize=10,
             textColor=colors.HexColor('#374151'),
-            spaceAfter=4
+            spaceAfter=4,
+            leftIndent=0,
+            rightIndent=0,
+            alignment=TA_LEFT,
+            fontName='Helvetica'
         ))
         
         # Footer text
@@ -100,6 +104,20 @@ class NarcoticsReportGenerator:
             textColor=colors.HexColor('#6b7280'),
             spaceAfter=4,
             alignment=TA_CENTER
+        ))
+        
+        # Flagged content list style
+        self.styles.add(ParagraphStyle(
+            name='FlaggedContent',
+            parent=self.styles['Normal'],
+            fontSize=10,
+            textColor=colors.HexColor('#374151'),
+            spaceAfter=6,
+            leftIndent=0,
+            rightIndent=0,
+            alignment=TA_LEFT,
+            fontName='Helvetica',
+            leading=12
         ))
     
     def generate_case_report(self, case, activities=None, content_items=None, output_path=None):
@@ -252,8 +270,19 @@ class NarcoticsReportGenerator:
         flagged_posts = len(content_items) if content_items else 0
         osint_results = 0  # Will be calculated from OSINT results
         
+        # Get platforms from content items
+        platforms = set()
+        if content_items:
+            for item in content_items:
+                if hasattr(item, 'source') and item.source and hasattr(item.source, 'platform'):
+                    platforms.add(item.source.platform.value)
+                elif hasattr(item, 'platform'):
+                    platforms.add(item.platform)
+        
+        platforms_text = ', '.join(platforms) if platforms else 'None'
+        
         summary_data = [
-            ['Platforms Analyzed', 'None'],
+            ['Platforms Analyzed', platforms_text],
             ['Flagged Users', str(flagged_users)],
             ['Flagged Posts', str(flagged_posts)],
             ['OSINT Results', str(osint_results)]
@@ -292,9 +321,14 @@ class NarcoticsReportGenerator:
         elements.append(Spacer(1, 8))
         
         if content_items and len(content_items) > 0:
-            # Add content items details
-            for item in content_items:
-                elements.append(Paragraph(f"• {item.content[:100]}...", self.styles['CaseInfo']))
+            # Add content items details with proper formatting
+            for i, item in enumerate(content_items, 1):
+                # Create a properly formatted bullet point with consistent indentation
+                content_text = item.text[:200] + "..." if len(item.text) > 200 else item.text
+                
+                # Use a numbered list format for better alignment
+                bullet_text = f"{i}. {content_text}"
+                elements.append(Paragraph(bullet_text, self.styles['FlaggedContent']))
         else:
             elements.append(Paragraph("No flagged content found for this case.", self.styles['CaseInfo']))
         

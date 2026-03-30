@@ -55,9 +55,27 @@ def signup():
         if not email or not password or not username:
             return jsonify({'error': 'Missing email, password, or username'}), 400
         
-        # Check if user already exists
+        # Validate email format
+        import re
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(email_pattern, email):
+            return jsonify({'error': 'Invalid email format'}), 400
+        
+        # Validate password strength
+        if len(password) < 8:
+            return jsonify({'error': 'Password must be at least 8 characters long'}), 400
+        
+        # Validate username
+        if len(username) < 3:
+            return jsonify({'error': 'Username must be at least 3 characters long'}), 400
+        
+        # Check if email already exists
         if SystemUser.get_by_email(email):
-            return jsonify({'error': 'User already exists'}), 400
+            return jsonify({'error': 'An account with this email address already exists. Please use a different email or try logging in.'}), 400
+        
+        # Check if username already exists
+        if SystemUser.get_by_username(username):
+            return jsonify({'error': 'This username is already taken. Please choose a different username.'}), 400
         
         # Create new system user
         try:

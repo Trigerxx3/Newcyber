@@ -46,6 +46,12 @@ interface ScrapedContentItem {
   sentimentScore: number
   analysisComplete: boolean
   flagged: boolean
+  // ML fields
+  ml_prediction?: string
+  ml_confidence?: number
+  risk_score?: number
+  risk_level_ml?: string
+  suspicion_score?: number
 }
 
 export default function DashboardPage() {
@@ -104,21 +110,33 @@ export default function DashboardPage() {
       try {
         const contentRes = await apiClient.getContent({ per_page: 10 })
         const rawItems = (contentRes as any)?.data || []
-        const items: ScrapedContentItem[] = rawItems.map((c: any) => ({
-          id: String(c.id),
-          platform: 'unknown',
-          author: c.author || 'Unknown',
-          text: c.text || '',
-          url: c.url || '',
-          timestamp: c.created_at || new Date().toISOString(),
-          scrapedAt: c.created_at || new Date().toISOString(),
-          keywordMatches: Array.isArray(c.keywords) ? c.keywords : [],
-          riskLevel: c.risk_level || 'Low',
-          status: c.status || 'Pending',
-          sentimentScore: typeof c.sentiment_score === 'number' ? c.sentiment_score : 0,
-          analysisComplete: (c.status || '').toLowerCase() === 'analyzed',
-          flagged: false,
-        }))
+        const items: ScrapedContentItem[] = rawItems.map((c: any) => {
+          // Use ML risk level if available, otherwise fall back to keyword-based
+          const riskLevel = c.risk_level_ml || c.risk_level || 'Low'
+          const riskScore = c.risk_score !== undefined ? c.risk_score : c.suspicion_score || 0
+          
+          return {
+            id: String(c.id),
+            platform: c.source?.platform?.toLowerCase() || 'unknown',
+            author: c.author || 'Unknown',
+            text: c.text || '',
+            url: c.url || '',
+            timestamp: c.created_at || new Date().toISOString(),
+            scrapedAt: c.created_at || new Date().toISOString(),
+            keywordMatches: Array.isArray(c.keywords) ? c.keywords : [],
+            riskLevel: riskLevel,
+            status: c.status || 'Pending',
+            sentimentScore: typeof c.sentiment_score === 'number' ? c.sentiment_score : 0,
+            analysisComplete: (c.status || '').toLowerCase() === 'analyzed',
+            flagged: c.is_flagged || riskLevel === 'High' || riskScore >= 71,
+            // ML fields
+            ml_prediction: c.ml_prediction,
+            ml_confidence: c.ml_confidence,
+            risk_score: riskScore,
+            risk_level_ml: c.risk_level_ml,
+            suspicion_score: c.suspicion_score
+          }
+        })
         setRecentScrapedContent(items)
       } catch (e) {
         console.warn('🔐 Dashboard: Failed to load recent content', e)
@@ -384,15 +402,29 @@ export default function DashboardPage() {
                           <Badge 
                             variant="secondary" 
                             className={`text-xs ${
-                              content.riskLevel === 'HIGH' || content.riskLevel === 'CRITICAL' 
+                              content.riskLevel === 'HIGH' || content.riskLevel === 'CRITICAL' || content.risk_level_ml === 'High'
                                 ? 'bg-red-500/20 text-red-400 border-red-400/30' 
-                                : content.riskLevel === 'MEDIUM'
+                                : content.riskLevel === 'MEDIUM' || content.risk_level_ml === 'Medium'
                                 ? 'bg-yellow-500/20 text-yellow-400 border-yellow-400/30'
                                 : 'bg-green-500/20 text-green-400 border-green-400/30'
                             }`}
                           >
-                            {content.riskLevel || 'Unknown'}
+                            {content.risk_level_ml || content.riskLevel || 'Unknown'}
+                            {content.risk_score !== undefined && ` (${content.risk_score})`}
                           </Badge>
+                          {content.ml_prediction && (
+                            <Badge 
+                              variant="outline" 
+                              className={`text-xs ${
+                                content.ml_prediction === 'Drug-Related' 
+                                  ? 'bg-red-500/20 text-red-400 border-red-400/30' 
+                                  : 'bg-green-500/20 text-green-400 border-green-400/30'
+                              }`}
+                            >
+                              ML: {content.ml_prediction}
+                              {content.ml_confidence !== undefined && ` (${Math.round(content.ml_confidence * 100)}%)`}
+                            </Badge>
+                          )}
                           <Badge variant="secondary" className="text-xs bg-primary/20 text-primary border-primary/30">
                             {new Date(content.timestamp).toLocaleDateString()}
                           </Badge>

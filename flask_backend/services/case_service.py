@@ -14,6 +14,7 @@ from models.user import User, SystemUser, SystemUserRole
 from models.content import Content
 from models.case_content_link import CaseContentLink
 from models.case_request import CaseRequest, RequestStatus
+from services.case_module import CaseModule
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,7 @@ class CaseService:
     
     def __init__(self):
         self.logger = logging.getLogger(__name__)
+        self.case_module = CaseModule()
     
     def can_create_case(self, user_id: int) -> Tuple[bool, str]:
         """Check if a user can create a new case"""
@@ -35,7 +37,7 @@ class CaseService:
             if user.role == SystemUserRole.ADMIN:
                 return True, "Admin can create cases"
             
-            # For analysts, check if they have any open cases
+            # For analysts, check if they have any open cases (only their own cases)
             open_cases = Case.query.join(UserCaseLink).filter(
                 and_(
                     UserCaseLink.user_id == user_id,
@@ -235,10 +237,19 @@ class CaseService:
                      current_user_id: int | None = None) -> Tuple[bool, str, Dict]:
         """Get all cases with optional filtering"""
         try:
-            # Start from cases; if a user is provided, scope to cases linked to that user
-            query = Case.query
+            # Check if current user is admin
+            is_admin = False
             if current_user_id:
+                user = SystemUser.query.get(current_user_id)
+                is_admin = user and user.role == SystemUserRole.ADMIN
+            
+            # Start from cases
+            query = Case.query
+            
+            # If user is provided and not admin, scope to cases linked to that user only
+            if current_user_id and not is_admin:
                 query = query.join(UserCaseLink).filter(UserCaseLink.user_id == current_user_id)
+            # If admin, they can see all cases (no additional filtering needed)
             
             if status:
                 try:
@@ -335,6 +346,9 @@ class CaseService:
                 linked_users.append(link_data)
             
             case_data['linked_users'] = linked_users
+            image_analysis_by_content = {}
+            if case.meta_data and isinstance(case.meta_data, dict):
+                image_analysis_by_content = case.meta_data.get('content_image_analysis') or {}
             # Linked content
             content_links = db.session.query(CaseContentLink).filter(
                 CaseContentLink.case_id == case_id
@@ -343,14 +357,39 @@ class CaseService:
             for cl in content_links:
                 content = Content.query.get(cl.content_id)
                 if content:
-                    content_dict = content.to_dict()
-                    content_dict['link_id'] = cl.id
-                    linked_content.append(content_dict)
+                    # Get source information for platform
+                    source = content.source if hasattr(content, 'source') else None
+                    platform = source.platform.value if source and hasattr(source.platform, 'value') else 'unknown'
+                    
+                    # Create the expected structure
+                    link_data = {
+                        'id': cl.id,
+                        'content_id': cl.content_id,
+                        'case_id': cl.case_id,
+                        'linked_at': cl.created_at.isoformat() if cl.created_at else None,
+                        'content': {
+                            'id': content.id,
+                            'text': content.text,
+                            'author': content.author,
+                            'platform': platform,
+                            'created_at': content.created_at.isoformat() if content.created_at else None,
+                            'url': content.url,
+                            'keywords': content.keywords or [],
+                            'sentiment_score': content.sentiment_score,
+                            'risk_level': content.risk_level.value if content.risk_level else None,
+                            'is_flagged': content.is_flagged,
+                            'suspicion_score': content.suspicion_score,
+                            'intent': content.intent,
+                            'analysis_summary': content.analysis_summary
+                        },
+                        'image_analysis': image_analysis_by_content.get(str(content.id))
+                    }
+                    linked_content.append(link_data)
             case_data['linked_content'] = linked_content
             
             case_data['statistics'] = {
                 'user_count': len(linked_users),
-                'content_count': 0,
+                'content_count': len(linked_content),
                 'days_open': (datetime.utcnow() - case.created_at).days,
                 'is_overdue': case.is_overdue(),
                 'progress_percentage': case.progress_percentage
@@ -383,6 +422,18 @@ class CaseService:
                 db.session.add(link)
                 created += 1
             db.session.commit()
+
+            # Run CV+fusion analysis for newly linked content and store per-case metadata.
+            for content_id in content_ids:
+                try:
+                    self.case_module.store_case_image_analysis(case_id=case_id, content_id=content_id)
+                except Exception as exc:
+                    self.logger.warning(
+                        "Image analysis skipped for case_id=%s content_id=%s: %s",
+                        case_id,
+                        content_id,
+                        exc,
+                    )
             return True, f"Linked {created} content item(s) to case", created
         except Exception as e:
             db.session.rollback()

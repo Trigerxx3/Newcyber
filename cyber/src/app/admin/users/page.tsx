@@ -58,6 +58,10 @@ import { useToast } from '@/hooks/use-toast'
 import { apiClient } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
+import { 
+  DeleteConfirmationDialog, 
+  ToggleStatusConfirmationDialog 
+} from '@/components/ui/confirmation-dialog'
 
 interface User {
   id: string
@@ -97,6 +101,11 @@ export default function UserManagement() {
   // Delete user state
   const [userToDelete, setUserToDelete] = useState<User | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  
+  // Toggle user status state
+  const [userToToggle, setUserToToggle] = useState<User | null>(null)
+  const [showToggleDialog, setShowToggleDialog] = useState(false)
+  const [isToggling, setIsToggling] = useState(false)
 
   // Check if user is admin
   useEffect(() => {
@@ -360,15 +369,27 @@ export default function UserManagement() {
   }
 
   const handleToggleUserStatus = async (userId: string) => {
+    const user = users.find(u => u.id === userId)
+    if (user) {
+      setUserToToggle(user)
+      setShowToggleDialog(true)
+    }
+  }
+
+  const confirmToggleUserStatus = async () => {
+    if (!userToToggle) return
+    
+    setIsToggling(true)
     try {
-      const target = users.find(u => u.id === userId)
-      const resp: any = await apiClient.toggleSystemUserActive(userId)
-      const isActive = resp?.isActive ?? !target?.isActive
-      setUsers(prev => prev.map(user => user.id === userId ? { ...user, isActive } : user))
+      const resp: any = await apiClient.toggleSystemUserActive(userToToggle.id)
+      const isActive = resp?.isActive ?? !userToToggle.isActive
+      setUsers(prev => prev.map(user => user.id === userToToggle.id ? { ...user, isActive } : user))
       toast({
         title: 'Success',
-        description: `User ${target?.username} ${isActive ? 'activated' : 'deactivated'}`
+        description: `User ${userToToggle.username} ${isActive ? 'activated' : 'deactivated'}`
       })
+      setShowToggleDialog(false)
+      setUserToToggle(null)
     } catch (error) {
       console.error('Failed to toggle user status:', error)
       toast({
@@ -376,6 +397,8 @@ export default function UserManagement() {
         description: 'Failed to update user status. Please try again.',
         variant: 'destructive'
       })
+    } finally {
+      setIsToggling(false)
     }
   }
 
@@ -812,6 +835,32 @@ export default function UserManagement() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Toggle User Status Confirmation Dialog */}
+      <ToggleStatusConfirmationDialog
+        open={showToggleDialog}
+        onOpenChange={setShowToggleDialog}
+        onConfirm={confirmToggleUserStatus}
+        itemName={userToToggle?.username || ''}
+        itemType="User"
+        currentStatus={userToToggle?.isActive ? 'active' : 'inactive'}
+        newStatus={userToToggle?.isActive ? 'inactive' : 'active'}
+        isLoading={isToggling}
+      />
+
+      {/* Delete User Confirmation Dialog */}
+      <DeleteConfirmationDialog
+        open={!!userToDelete}
+        onOpenChange={(open) => {
+          if (!open) {
+            setUserToDelete(null)
+          }
+        }}
+        onConfirm={handleDeleteUser}
+        itemName={userToDelete?.username || ''}
+        itemType="User"
+        isLoading={isDeleting}
+      />
     </div>
   )
 }

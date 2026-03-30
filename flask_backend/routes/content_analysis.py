@@ -9,6 +9,7 @@ from models.content import Content, ContentStatus, RiskLevel, ContentType
 from models.source import Source, PlatformType, SourceType
 from models.user import SystemUser
 from services.content_analysis import analyze_content
+from services.ml_content_analysis import analyze_content_enhanced
 from sqlalchemy.exc import SQLAlchemyError
 from datetime import datetime
 import json
@@ -92,8 +93,33 @@ def analyze_content_endpoint():
         except ValueError:
             platform_enum = PlatformType.UNKNOWN
         
-        # Analyze content using NLP service
-        analysis_result = analyze_content(content_text)
+        # Analyze content using enhanced ML service
+        try:
+            analysis_result = analyze_content_enhanced(
+                text=content_text,
+                platform=platform,
+                username=username,
+                post_frequency=0.0  # Default, can be enhanced with historical data
+            )
+        except Exception as e:
+            logger.warning(f"Enhanced analysis failed, falling back to keyword analysis: {str(e)}")
+            # Fallback to keyword-based analysis
+            keyword_result = analyze_content(content_text)
+            # Convert to enhanced format
+            from services.ml_content_analysis import EnhancedAnalysisResult
+            analysis_result = EnhancedAnalysisResult(
+                matched_keywords=keyword_result.matched_keywords,
+                suspicion_score=keyword_result.suspicion_score,
+                intent=keyword_result.intent,
+                is_flagged=keyword_result.is_flagged,
+                confidence=keyword_result.confidence,
+                analysis_data=keyword_result.analysis_data,
+                processing_time=keyword_result.processing_time,
+                ml_prediction="Non-Drug-Related",
+                ml_confidence=0.5,
+                risk_score=keyword_result.suspicion_score,
+                risk_level="Low" if keyword_result.suspicion_score < 41 else "Medium" if keyword_result.suspicion_score < 71 else "High"
+            )
         
         # Only save to database if requested
         content_id = None
@@ -116,6 +142,17 @@ def analyze_content_endpoint():
                 db.session.add(source)
                 db.session.flush()  # Get the ID
             
+            # Map ML risk level to RiskLevel enum
+            risk_level_map = {
+                "High": RiskLevel.HIGH,
+                "Medium": RiskLevel.MEDIUM,
+                "Low": RiskLevel.LOW
+            }
+            ml_risk_level = risk_level_map.get(analysis_result.risk_level, RiskLevel.LOW)
+            
+            # Use ML risk level if available, otherwise use keyword-based
+            final_risk_level = ml_risk_level if analysis_result.risk_score >= 41 else (RiskLevel.HIGH if analysis_result.is_flagged else RiskLevel.LOW)
+            
             # Create content record
             content = Content(
                 source_id=source.id,
@@ -123,20 +160,25 @@ def analyze_content_endpoint():
                 text=content_text,
                 author=username,
                 content_type=ContentType.TEXT,
-                risk_level=RiskLevel.HIGH if analysis_result.is_flagged else RiskLevel.LOW,
+                risk_level=final_risk_level,
                 status=ContentStatus.ANALYZED,
                 keywords=analysis_result.matched_keywords,
-                analysis_summary=f"Intent: {analysis_result.intent}, Score: {analysis_result.suspicion_score}",
+                analysis_summary=f"Intent: {analysis_result.intent}, ML Prediction: {analysis_result.ml_prediction}, Risk Score: {analysis_result.risk_score}",
                 analysis_data=analysis_result.analysis_data,
                 suspicion_score=analysis_result.suspicion_score,
                 intent=analysis_result.intent,
-                is_flagged=analysis_result.is_flagged,
+                is_flagged=analysis_result.is_flagged or analysis_result.risk_level == "High",
                 word_count=len(content_text.split()),
                 character_count=len(content_text),
                 confidence_score=analysis_result.confidence,
                 processing_time=analysis_result.processing_time,
-                analysis_version='nlp-v1.0',
-                last_analyzed=datetime.utcnow()
+                analysis_version='ml-enhanced-v1.0',
+                last_analyzed=datetime.utcnow(),
+                # ML fields
+                ml_prediction=analysis_result.ml_prediction,
+                ml_confidence=analysis_result.ml_confidence,
+                risk_score=analysis_result.risk_score,
+                risk_level_ml=analysis_result.risk_level
             )
             
             db.session.add(content)
@@ -171,7 +213,7 @@ def analyze_content_endpoint():
         except Exception as e:
             logger.warning(f"Failed to track content analysis activity: {str(e)}")
         
-        # Prepare response
+        # Prepare response with ML results
         response_data = {
             'status': 'success',
             'platform': platform,
@@ -183,6 +225,12 @@ def analyze_content_endpoint():
             'is_flagged': analysis_result.is_flagged,
             'confidence': analysis_result.confidence,
             'analysis_data': analysis_result.analysis_data,
+            # ML-based results
+            'ml_prediction': analysis_result.ml_prediction,
+            'ml_confidence': analysis_result.ml_confidence,
+            'risk_score': analysis_result.risk_score,
+            'risk_level': analysis_result.risk_level,
+            'keywords': analysis_result.matched_keywords,  # Alias for compatibility
             'content_id': content_id,  # Will be None if not saved to database
             'processing_time': analysis_result.processing_time,
             'saved_to_database': save_to_database
@@ -609,7 +657,12 @@ def get_scraped_content_for_analysis():
                 'is_analyzed': bool(item.analysis_summary and item.suspicion_score is not None),
                 'suspicion_score': item.suspicion_score or 0,
                 'intent': item.intent or 'Unknown',
-                'is_flagged': item.is_flagged or False
+                'is_flagged': item.is_flagged or False,
+                # ML fields
+                'ml_prediction': item.ml_prediction,
+                'ml_confidence': item.ml_confidence,
+                'risk_score': item.risk_score,
+                'risk_level_ml': item.risk_level_ml
             })
         
         return jsonify(content_data), 200

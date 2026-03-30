@@ -173,6 +173,7 @@ export default function DataScraping() {
   const [realScrapePlatform, setRealScrapePlatform] = useState<'telegram' | 'instagram'>('telegram')
   const [realScrapeChannel, setRealScrapeChannel] = useState('')
   const [realScrapeLimit, setRealScrapeLimit] = useState('10')
+  const [realScrapeKeywords, setRealScrapeKeywords] = useState('')
   const [realScrapeLoading, setRealScrapeLoading] = useState(false)
   const [realScrapeResult, setRealScrapeResult] = useState<any>(null)
 
@@ -298,14 +299,20 @@ export default function DataScraping() {
     try {
       let response: any
       if (realScrapePlatform === 'telegram') {
+        const keywordList = realScrapeKeywords
+          .split(',')
+          .map((k) => k.trim())
+          .filter(Boolean)
+
         response = await apiClient.scrapeTelegramChannel(
           realScrapeChannel.trim(),
-          parseInt(realScrapeLimit) || 10
+          parseInt(realScrapeLimit) || 10,
+          keywordList
         )
         setRealScrapeResult(response)
         toast({
           title: 'Scraping Complete!',
-          description: `Successfully scraped ${response.saved_to_db} new messages from @${response.channel}`,
+          description: `Successfully scraped ${response.saved_to_db} matched messages from @${response.channel}`,
         })
       } else {
         response = await apiClient.scrapeInstagramProfile(
@@ -645,6 +652,21 @@ export default function DataScraping() {
                       max="100"
                     />
                   </div>
+                  {realScrapePlatform === 'telegram' && (
+                    <div className="flex-1">
+                      <Label htmlFor="keyword-input" className="text-white text-sm">Keywords (comma separated)</Label>
+                      <Input
+                        id="keyword-input"
+                        placeholder="drug, cocaine, heroin"
+                        value={realScrapeKeywords}
+                        onChange={(e) => setRealScrapeKeywords(e.target.value)}
+                        className="bg-white/10 border-white/20 text-white mt-1"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">
+                        Only messages matching at least one keyword are saved.
+                      </p>
+                    </div>
+                  )}
                   <Button
                     onClick={handleRealScrape}
                     disabled={!realScrapeChannel || realScrapeLoading}
@@ -672,7 +694,7 @@ export default function DataScraping() {
                     </p>
                     <p className="text-gray-300 text-xs mt-1">
                       {realScrapePlatform === 'telegram'
-                        ? `Total found: ${realScrapeResult.total_scraped} | Saved to database: ${realScrapeResult.saved_to_db}`
+                        ? `Total matched: ${realScrapeResult.total_messages} | Saved to database: ${realScrapeResult.saved_to_db}`
                         : `Saved to database: ${realScrapeResult.saved_to_db ?? 'N/A'}`}
                     </p>
                   </div>

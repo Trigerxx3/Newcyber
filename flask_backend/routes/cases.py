@@ -24,6 +24,7 @@ def get_cases():
     try:
         current_user = getattr(request, 'current_user', None)
         current_user_id = current_user.id if current_user else None
+        
         # Get query parameters
         status = request.args.get('status')
         priority = request.args.get('priority')
@@ -32,7 +33,7 @@ def get_cases():
         page = request.args.get('page', 1, type=int)
         per_page = min(request.args.get('per_page', 10, type=int), 100)
         
-        # Use case service
+        # Use case service with user isolation
         success, message, data = case_service.get_all_cases(
             status=status,
             priority=priority,
@@ -55,8 +56,32 @@ def get_cases():
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+@cases_bp.route('/test-users', methods=['GET'])
+def get_test_users():
+    """Get all users for testing user isolation"""
+    try:
+        from models.user import SystemUser
+        users = SystemUser.query.all()
+        users_data = []
+        for user in users:
+            users_data.append({
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'role': user.role.value,
+                'is_active': user.is_active
+            })
+        
+        return jsonify({
+            'status': 'success',
+            'data': users_data
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 @cases_bp.route('/', methods=['POST'])
-# @require_auth  # Temporarily disabled for testing
+@require_auth
 def create_case():
     """Create new case"""
     try:
@@ -66,15 +91,8 @@ def create_case():
         if not data or 'title' not in data:
             return jsonify({'error': 'Title is required'}), 400
         
-        # Get current user ID from auth context (or use default for testing)
+        # Get current user ID from auth context
         current_user = getattr(request, 'current_user', None)
-        if not current_user:
-            # For testing without auth, use the first admin user
-            from models.user import SystemUser
-            current_user = SystemUser.query.filter_by(role='Admin').first()
-            if not current_user:
-                return jsonify({'error': 'No admin user found. Please create an admin user first.'}), 400
-        
         created_by_id = current_user.id if current_user else None
         
         # Check if user can create a case directly

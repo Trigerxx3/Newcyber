@@ -25,8 +25,15 @@ local.db
 # Session files (Instagram, Telegram, etc.)
 *_session.json
 *.session
+*.session-journal
 instagram_session.json
 telegram_session.session
+
+# Generated evaluation outputs / local datasets
+flask_backend/results/
+flask_backend/labeling_*.csv
+flask_backend/telegram_for_labeling.csv
+flask_backend/git_log.txt
 
 # IDE
 .vscode/

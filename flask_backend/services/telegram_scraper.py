@@ -34,12 +34,21 @@ class TelegramScraper:
         """Initialize Telegram client"""
         try:
             # Try to import telethon (popular Telegram client library)
+            import sys
+            if sys.version_info >= (3, 13):
+                # Python 3.13+ compatibility fix for imghdr
+                import types
+                imghdr = types.ModuleType('imghdr')
+                imghdr.what = lambda file, h=None: None
+                sys.modules['imghdr'] = imghdr
+            
             from telethon import TelegramClient
             from telethon.errors import SessionPasswordNeededError
             
             if not self.api_id or not self.api_hash:
                 logger.warning("Telegram API credentials not found. Please set TELEGRAM_API_ID and TELEGRAM_API_HASH in environment variables.")
                 logger.info("You can get these from https://my.telegram.org/auth")
+                logger.info("See ENABLE_REAL_TELEGRAM_SCRAPING.md for setup instructions")
                 return False
             
             # Create client with session file for persistence
@@ -50,27 +59,37 @@ class TelegramScraper:
                 system_version="4.16.30-vxCUSTOM"
             )
             
-            # Start the client
-            await self.client.start(
-                phone=os.environ.get('TELEGRAM_PHONE_NUMBER'),
-                bot_token=self.bot_token if self.bot_token else None
-            )
+            # Start the client - prioritize user authentication for channel access
+            phone_number = os.environ.get('TELEGRAM_PHONE_NUMBER')
+            if phone_number:
+                # Use phone number authentication (required for channel access)
+                # Don't pass bot_token when using phone authentication
+                await self.client.start(phone=phone_number)
+            elif self.bot_token:
+                # Use bot token authentication (limited channel access)
+                await self.client.start(bot_token=self.bot_token)
+            else:
+                # Try to start without authentication (for existing sessions)
+                await self.client.start()
             
             # Check if we're connected
             if await self.client.is_user_authorized():
-                logger.info("Telegram client initialized successfully")
+                logger.info("✅ Telegram client initialized successfully - REAL API ACTIVE")
+                logger.info("🚀 Real Telegram scraping is now enabled!")
                 return True
             else:
                 logger.warning("Telegram client not authorized. Manual login required.")
+                logger.info("Please check your phone number and try again")
                 return False
             
         except ImportError:
-            logger.error("Telethon not installed. Install with: pip install telethon cryptg")
+            logger.error("❌ Telethon not installed. Install with: pip install telethon cryptg")
             logger.info("Run: pip install telethon cryptg")
             return False
         except Exception as e:
-            logger.error(f"Failed to initialize Telegram client: {e}")
+            logger.error(f"❌ Failed to initialize Telegram client: {e}")
             logger.info("Make sure your API credentials are correct and your phone number is verified")
+            logger.info("See ENABLE_REAL_TELEGRAM_SCRAPING.md for troubleshooting")
             return False
     
     async def get_public_channels(self) -> List[Dict[str, Any]]:
@@ -132,27 +151,39 @@ class TelegramScraper:
             
             # Scrape messages
             messages = []
+            keyword_matches = 0
+            
             async for message in self.client.iter_messages(channel, limit=max_messages):
                 if message.text:
-                    # Filter by keywords if provided
-                    if keywords:
-                        if not any(keyword.lower() in message.text.lower() for keyword in keywords):
-                            continue
+                    # Enhanced keyword filtering with case-insensitive matching
+                    message_matches_keywords = True
+                    matched_keywords = []
                     
-                    message_data = {
-                        'id': message.id,
-                        'text': message.text,
-                        'date': message.date.isoformat() if message.date else None,
-                        'author': getattr(message.sender, 'username', 'Unknown') if message.sender else 'Unknown',
-                        'author_id': message.sender_id,
-                        'views': getattr(message, 'views', 0),
-                        'forwards': getattr(message, 'forwards', 0),
-                        'replies': getattr(message.replies, 'replies', 0) if message.replies else 0,
-                        'media': bool(message.media),
-                        'media_type': str(type(message.media).__name__) if message.media else None,
-                        'url': f"https://t.me/{channel.username}/{message.id}" if hasattr(channel, 'username') else None
-                    }
-                    messages.append(message_data)
+                    if keywords:
+                        message_text_lower = message.text.lower()
+                        matched_keywords = [kw for kw in keywords if kw.lower() in message_text_lower]
+                        message_matches_keywords = len(matched_keywords) > 0
+                    
+                    # Only include messages that match keywords (if provided)
+                    if message_matches_keywords:
+                        keyword_matches += 1
+                        
+                        message_data = {
+                            'id': message.id,
+                            'text': message.text,
+                            'date': message.date.isoformat() if message.date else None,
+                            'author': getattr(message.sender, 'username', 'Unknown') if message.sender else 'Unknown',
+                            'author_id': message.sender_id,
+                            'views': getattr(message, 'views', 0),
+                            'forwards': getattr(message, 'forwards', 0),
+                            'replies': getattr(message.replies, 'replies', 0) if message.replies else 0,
+                            'media': bool(message.media),
+                            'media_type': str(type(message.media).__name__) if message.media else None,
+                            'url': f"https://t.me/{channel.username}/{message.id}" if hasattr(channel, 'username') else None,
+                            'matched_keywords': matched_keywords,
+                            'keyword_score': len(matched_keywords) if keywords else 0
+                        }
+                        messages.append(message_data)
             
             result = {
                 'channel_id': channel_id,
@@ -161,10 +192,15 @@ class TelegramScraper:
                 'messages': messages,
                 'scraped_at': datetime.now().isoformat(),
                 'keywords_used': keywords or [],
-                'max_messages_requested': max_messages
+                'max_messages_requested': max_messages,
+                'keyword_matches': keyword_matches,
+                'data_mode': 'real_api',
+                'scraping_status': 'success'
             }
             
-            logger.info(f"Successfully scraped {len(messages)} messages from {channel_id}")
+            logger.info(f"✅ Successfully scraped {len(messages)} messages from {channel_id}")
+            if keywords:
+                logger.info(f"🎯 Found {keyword_matches} messages matching keywords: {keywords}")
             return result
             
         except Exception as e:

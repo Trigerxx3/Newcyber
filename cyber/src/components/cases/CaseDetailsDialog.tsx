@@ -4,12 +4,14 @@ import { useEffect, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import apiClient from '@/lib/api'
 import { toast } from '@/hooks/use-toast'
-import { Download, Info, Activity, FileText } from 'lucide-react'
+import { Download, Info, Activity, FileText, Link, Plus, ExternalLink, Tag } from 'lucide-react'
 import { CaseActivities } from '@/components/case-activities'
 import { CaseActivitiesSummary } from '@/components/case-activities-summary'
+import LinkContentDialog from './LinkContentDialog'
 import { format } from 'date-fns'
 
 interface CaseDetails {
@@ -33,7 +35,33 @@ interface CaseDetails {
   findings?: string
   recommendations?: string
   linked_users?: Array<any>
-  linked_content?: Array<any>
+  linked_content?: Array<{
+    id: number
+    content_id: number
+    case_id: number
+    linked_at: string
+    content?: {
+      id: number
+      text: string
+      author: string
+      platform: string
+      created_at: string
+      url?: string
+      keywords?: string[]
+      sentiment_score?: number
+      risk_level?: string
+      is_flagged?: boolean
+    }
+    image_analysis?: {
+      image_path?: string | null
+      image_prediction?: string
+      image_confidence?: number
+      image_risk_score?: number
+      text_risk_score?: number
+      final_score?: number
+      final_prediction?: string
+    } | null
+  }>
   statistics?: {
     user_count: number
     days_open: number
@@ -51,6 +79,7 @@ export default function CaseDetailsDialog({ open, onOpenChange, caseId, onCaseUp
   const [caseDetails, setCaseDetails] = useState<CaseDetails | null>(null)
   const [loading, setLoading] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const [showLinkContentDialog, setShowLinkContentDialog] = useState(false)
 
   const fetchCaseDetails = async () => {
     try {
@@ -76,6 +105,15 @@ export default function CaseDetailsDialog({ open, onOpenChange, caseId, onCaseUp
       fetchCaseDetails()
     }
   }, [open, caseId])
+
+  const formatDate = (dateString: string | undefined): string => {
+    if (!dateString) return 'Unknown date'
+    
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) return 'Invalid date'
+    
+    return format(date, 'MMM dd, yyyy HH:mm')
+  }
 
   const downloadDetailedReport = async () => {
     try {
@@ -156,10 +194,20 @@ export default function CaseDetailsDialog({ open, onOpenChange, caseId, onCaseUp
                 </Badge>
               </div>
             </div>
-            <Button onClick={downloadDetailedReport} disabled={downloading} size="sm">
-              <Download className="w-4 h-4 mr-2" />
-              {downloading ? 'Generating...' : 'PDF Report'}
-            </Button>
+            <div className="flex gap-2">
+              <Button 
+                onClick={() => setShowLinkContentDialog(true)} 
+                variant="outline" 
+                size="sm"
+              >
+                <Link className="w-4 h-4 mr-2" />
+                Link Content
+              </Button>
+              <Button onClick={downloadDetailedReport} disabled={downloading} size="sm">
+                <Download className="w-4 h-4 mr-2" />
+                {downloading ? 'Generating...' : 'PDF Report'}
+              </Button>
+            </div>
           </div>
         </DialogHeader>
 
@@ -168,7 +216,7 @@ export default function CaseDetailsDialog({ open, onOpenChange, caseId, onCaseUp
         </div>
 
         <Tabs defaultValue="overview" className="mt-4">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="overview">
               <Info className="w-4 h-4 mr-2" />
               Overview
@@ -176,6 +224,10 @@ export default function CaseDetailsDialog({ open, onOpenChange, caseId, onCaseUp
             <TabsTrigger value="activities">
               <Activity className="w-4 h-4 mr-2" />
               Activities
+            </TabsTrigger>
+            <TabsTrigger value="content">
+              <Link className="w-4 h-4 mr-2" />
+              Content
             </TabsTrigger>
             <TabsTrigger value="details">
               <FileText className="w-4 h-4 mr-2" />
@@ -226,6 +278,164 @@ export default function CaseDetailsDialog({ open, onOpenChange, caseId, onCaseUp
             <CaseActivities caseId={caseId} />
           </TabsContent>
 
+          <TabsContent value="content" className="space-y-4 mt-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold">Linked Content</h3>
+                <p className="text-sm text-muted-foreground">
+                  Scraped content linked to this case ({caseDetails?.linked_content?.length || 0} items)
+                </p>
+              </div>
+              <Button 
+                onClick={() => setShowLinkContentDialog(true)} 
+                variant="outline" 
+                size="sm"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Link More Content
+              </Button>
+            </div>
+            
+            {/* Display linked content */}
+            {caseDetails?.linked_content && caseDetails.linked_content.length > 0 ? (
+              <div className="space-y-4">
+                {caseDetails.linked_content.map((link) => (
+                  <Card key={link.id} className="glassmorphism">
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="border-white/20 text-muted-foreground">
+                            {link.content?.platform || 'Unknown'}
+                          </Badge>
+                          <span className="text-sm text-foreground">
+                            @{link.content?.author || 'Unknown'}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {formatDate(link.content?.created_at)}
+                          </span>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          {link.content?.risk_level && (
+                            <Badge variant="outline" className="text-xs border-white/20 text-muted-foreground">
+                              Risk: {link.content.risk_level}
+                            </Badge>
+                          )}
+                          {link.content?.is_flagged && (
+                            <Badge variant="destructive" className="text-xs bg-destructive/20 text-destructive border-destructive/30">
+                              Flagged
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+
+                      <p className="text-sm mb-2 line-clamp-2 text-foreground">
+                        {link.content?.text || 'No content text available'}
+                      </p>
+
+                      {link.content?.keywords && link.content.keywords.length > 0 && (
+                        <div className="flex items-center gap-1 mb-2">
+                          <Tag className="w-3 h-3 text-muted-foreground" />
+                          <div className="flex flex-wrap gap-1">
+                            {link.content.keywords.map((keyword, index) => (
+                              <Badge key={index} variant="secondary" className="text-xs bg-white/10 text-muted-foreground border-white/20">
+                                {keyword}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {link.image_analysis && (
+                        <div className="mt-3 rounded-md border border-cyan-500/30 bg-cyan-500/5 p-3">
+                          <div className="mb-2 flex items-center justify-between">
+                            <span className="text-sm font-medium text-cyan-300">Computer Vision Analysis</span>
+                            <Badge
+                              variant={link.image_analysis.final_prediction === 'Drug-Related' ? 'destructive' : 'secondary'}
+                              className="text-xs"
+                            >
+                              {link.image_analysis.final_prediction || 'Unknown'}
+                            </Badge>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3 text-xs">
+                            <div>
+                              <div className="text-muted-foreground">Image Prediction</div>
+                              <div className="font-medium text-foreground">
+                                {link.image_analysis.image_prediction || 'N/A'}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-muted-foreground">Image Confidence</div>
+                              <div className="font-medium text-foreground">
+                                {link.image_analysis.image_confidence !== undefined
+                                  ? `${(link.image_analysis.image_confidence * 100).toFixed(1)}%`
+                                  : 'N/A'}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-muted-foreground">Image Risk Score</div>
+                              <div className="font-medium text-foreground">
+                                {link.image_analysis.image_risk_score !== undefined
+                                  ? `${(link.image_analysis.image_risk_score * 100).toFixed(1)}%`
+                                  : 'N/A'}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-muted-foreground">Text Risk Score</div>
+                              <div className="font-medium text-foreground">
+                                {link.image_analysis.text_risk_score !== undefined
+                                  ? `${(link.image_analysis.text_risk_score * 100).toFixed(1)}%`
+                                  : 'N/A'}
+                              </div>
+                            </div>
+                            <div className="col-span-2">
+                              <div className="text-muted-foreground">Final Fused Score (0.6 text + 0.4 image)</div>
+                              <div className="font-semibold text-foreground">
+                                {link.image_analysis.final_score !== undefined
+                                  ? `${(link.image_analysis.final_score * 100).toFixed(1)}%`
+                                  : 'N/A'}
+                              </div>
+                            </div>
+                          </div>
+
+                          {link.image_analysis.image_path && (
+                            <div className="mt-2 text-xs text-muted-foreground">
+                              Image Path: {link.image_analysis.image_path}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <span className="text-xs text-muted-foreground">
+                          Linked: {formatDate(link.linked_at)}
+                        </span>
+                        {link.content?.url && (
+                          <a 
+                            href={link.content.url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-primary hover:text-primary/80"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            View Original
+                          </a>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <Link className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                <p>No content linked to this case yet</p>
+                <p className="text-sm">Click "Link More Content" to add scraped content</p>
+              </div>
+            )}
+          </TabsContent>
+
           <TabsContent value="details" className="space-y-4 mt-4">
             {caseDetails.objectives && (
               <div>
@@ -256,6 +466,18 @@ export default function CaseDetailsDialog({ open, onOpenChange, caseId, onCaseUp
             )}
           </TabsContent>
         </Tabs>
+
+        {/* Link Content Dialog */}
+        <LinkContentDialog
+          open={showLinkContentDialog}
+          onOpenChange={setShowLinkContentDialog}
+          caseId={caseId}
+          caseTitle={caseDetails?.title || ''}
+          onContentLinked={() => {
+            fetchCaseDetails()
+            onCaseUpdate()
+          }}
+        />
       </DialogContent>
     </Dialog>
   )

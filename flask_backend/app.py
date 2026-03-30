@@ -139,9 +139,9 @@ def create_app(config_name='development'):
         with app.app_context():
             # Create all tables if they don't exist
             db.create_all()
-            print("✅ Database tables created/verified")
+            print("[OK] Database tables created/verified")
     except Exception as e:
-        print(f"⚠️  Could not create database tables: {e}")
+        print(f"[WARNING] Could not create database tables: {e}")
     
     # Bootstrap: ensure a default admin exists (both dev and production)
     try:
@@ -156,14 +156,14 @@ def create_app(config_name='development'):
                 admin.set_password('admin123456')
                 db.session.add(admin)
                 db.session.commit()
-                print("✅ Admin user created: admin@cyber.com / admin123456")
+                print("[OK] Admin user created: admin@cyber.com / admin123456")
             else:
                 # Ensure password is set correctly
                 admin.set_password('admin123456')
                 db.session.commit()
-                print("✅ Admin user verified: admin@cyber.com / admin123456")
+                print("[OK] Admin user verified: admin@cyber.com / admin123456")
     except Exception as e:
-        print(f"⚠️  Bootstrap admin failed: {e}")
+        print(f"[WARNING] Bootstrap admin failed: {e}")
     
     # Add global OPTIONS handler for CORS preflight requests
     @app.before_request
