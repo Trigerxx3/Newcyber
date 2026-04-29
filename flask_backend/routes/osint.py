@@ -280,26 +280,36 @@ def check_tools_status():
     """Check if OSINT tools are installed and available"""
     try:
         from services.osint_tools import OSINTToolsService
+        import os
         
         tools_service = OSINTToolsService()
         
+        sherlock_exists = tools_service.sherlock_path.exists()
+        spiderfoot_exists = tools_service.spiderfoot_path.exists()
+        
         status = {
             'sherlock': {
-                'installed': tools_service.sherlock_path.exists(),
-                'path': str(tools_service.sherlock_path)
+                'installed': sherlock_exists,
+                'path': str(tools_service.sherlock_path),
             },
             'spiderfoot': {
-                'installed': tools_service.spiderfoot_path.exists(),
-                'path': str(tools_service.spiderfoot_path)
+                'installed': spiderfoot_exists,
+                'path': str(tools_service.spiderfoot_path),
             }
         }
         
+        logger.info(f"Tools status - Sherlock: {sherlock_exists}, Spiderfoot: {spiderfoot_exists}")
+        logger.info(f"Tools dir: {tools_service.tools_dir}, CWD: {os.getcwd()}")
+        
         return jsonify({
             'status': 'success',
-            'tools': status
+            'tools': status,
+            'tools_dir': str(tools_service.tools_dir),
+            'cwd': os.getcwd()
         }), 200
         
     except Exception as e:
+        logger.error(f"Tools status check error: {e}")
         return jsonify({
             'status': 'error',
             'message': str(e)

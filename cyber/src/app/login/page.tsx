@@ -30,7 +30,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
-  const [backendStatus, setBackendStatus] = useState<'checking' | 'connected' | 'error'>('checking')
+  const [backendStatus, setBackendStatus] = useState<'checking' | 'connected' | 'error'>('connected')
   const [passwordVisible, setPasswordVisible] = useState(false)
   const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false)
   const [isSignUp, setIsSignUp] = useState(false)
@@ -288,16 +288,7 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Backend status banner */}
-          {backendStatus === 'checking' && (
-            <Alert className="mb-4">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <AlertDescription>
-                Checking backend at {apiBase}...
-              </AlertDescription>
-            </Alert>
-          )}
-          {/* Connected banner removed per request */}
+          {/* Backend error banner (only shown if backend is unreachable) */}
           {backendStatus === 'error' && (
             <Alert className="mb-4" variant="destructive">
               <AlertTriangle className="h-4 w-4" />

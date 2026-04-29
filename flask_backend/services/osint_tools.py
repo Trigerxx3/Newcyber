@@ -16,22 +16,36 @@ class OSINTToolsService:
     """Service for running real OSINT tools like Sherlock and Spiderfoot"""
     
     def __init__(self):
-        self.tools_dir = Path(__file__).parent.parent.parent / "osint_tools"  # Go up one more level
+        self.tools_dir = self._find_tools_dir()
         self.sherlock_path = self.tools_dir / "sherlock" / "sherlock_project" / "sherlock.py"
         self.spiderfoot_path = self.tools_dir / "spiderfoot" / "sf.py"
         
-        # Alternative paths if installed globally
-        if not self.sherlock_path.exists():
-            # Check if sherlock is installed globally
-            try:
-                result = subprocess.run(['which', 'sherlock'], capture_output=True, text=True)
-                if result.returncode == 0:
-                    self.sherlock_path = Path(result.stdout.strip())
-            except:
-                pass
-        
-        logger.info(f"Sherlock path: {self.sherlock_path}")
-        logger.info(f"Spiderfoot path: {self.spiderfoot_path}")
+        logger.info(f"Tools dir resolved: {self.tools_dir}")
+        logger.info(f"Sherlock path: {self.sherlock_path} (exists: {self.sherlock_path.exists()})")
+        logger.info(f"Spiderfoot path: {self.spiderfoot_path} (exists: {self.spiderfoot_path.exists()})")
+
+    def _find_tools_dir(self) -> Path:
+        """Robustly find the osint_tools directory by trying multiple paths"""
+        candidates = [
+            # From __file__: flask_backend/services/osint_tools.py -> 3 levels up
+            Path(__file__).resolve().parent.parent.parent / "osint_tools",
+            # From cwd: if running from flask_backend/
+            Path(os.getcwd()) / ".." / "osint_tools",
+            # From cwd: if running from project root
+            Path(os.getcwd()) / "osint_tools",
+            # From cwd parent
+            Path(os.getcwd()).parent / "osint_tools",
+        ]
+        for candidate in candidates:
+            resolved = candidate.resolve()
+            if resolved.exists() and resolved.is_dir():
+                logger.info(f"Found osint_tools at: {resolved}")
+                return resolved
+
+        # Default fallback (may not exist, but keeps path calculation consistent)
+        default = Path(__file__).resolve().parent.parent.parent / "osint_tools"
+        logger.warning(f"osint_tools not found in any candidate path, defaulting to: {default}")
+        return default
         
     def run_sherlock(self, username: str, timeout: int = 60) -> Dict:
         """Run Sherlock to find username across social networks"""

@@ -37,12 +37,18 @@ interface ToolStatus {
   spiderfoot: { installed: boolean; path: string };
 }
 
+interface ToolStatusResponse extends ToolStatus {
+  tools_dir?: string;
+  cwd?: string;
+}
+
 export function UserInvestigationDashboard() {
   const [username, setUsername] = useState('');
   const [platform, setPlatform] = useState('Telegram');
   const [isLoading, setIsLoading] = useState(false);
   const [results, setResults] = useState<OSINTResult | null>(null);
   const [toolStatus, setToolStatus] = useState<ToolStatus | null>(null);
+  const [toolStatusMeta, setToolStatusMeta] = useState<{ tools_dir?: string; cwd?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [backendStatus, setBackendStatus] = useState<'checking' | 'connected' | 'error'>('checking');
 
@@ -79,6 +85,7 @@ export function UserInvestigationDashboard() {
       const data = await apiClient.getOsintToolsStatus() as any;
       if (data?.status === 'success') {
         setToolStatus(data.tools);
+        setToolStatusMeta({ tools_dir: data.tools_dir, cwd: data.cwd });
       }
     } catch (err) {
       console.error('Failed to check tool status:', err);
@@ -178,21 +185,41 @@ export function UserInvestigationDashboard() {
               OSINT Tools Status
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
             <div className="grid grid-cols-2 gap-4">
               <div className="flex items-center justify-between">
-                <span>Sherlock</span>
-                <Badge variant={toolStatus.sherlock?.installed ? "default" : "destructive"}>
-                  {toolStatus.sherlock?.installed ? "Installed" : "Not Found"}
+                <span className="font-medium">Sherlock</span>
+                <Badge variant={toolStatus.sherlock?.installed ? "default" : "secondary"}>
+                  {toolStatus.sherlock?.installed ? "✅ Installed" : "⚠️ Not Found"}
                 </Badge>
               </div>
               <div className="flex items-center justify-between">
-                <span>Spiderfoot</span>
-                <Badge variant={toolStatus.spiderfoot?.installed ? "default" : "destructive"}>
-                  {toolStatus.spiderfoot?.installed ? "Installed" : "Not Found"}
+                <span className="font-medium">Spiderfoot</span>
+                <Badge variant={toolStatus.spiderfoot?.installed ? "default" : "secondary"}>
+                  {toolStatus.spiderfoot?.installed ? "✅ Installed" : "⚠️ Not Found"}
                 </Badge>
               </div>
             </div>
+
+            {(!toolStatus.sherlock?.installed || !toolStatus.spiderfoot?.installed) && (
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription className="text-sm space-y-2">
+                  <p>
+                    <strong>Tools not detected</strong> — investigations will use the URL-checker fallback instead.
+                    This still works but with fewer results than the full tools.
+                  </p>
+                  {toolStatusMeta?.tools_dir && (
+                    <div className="text-xs text-muted-foreground space-y-1 mt-2 font-mono bg-muted p-2 rounded">
+                      <div><span className="font-semibold">Expected tools dir:</span> {toolStatusMeta.tools_dir}</div>
+                      <div><span className="font-semibold">Sherlock:</span> {toolStatus.sherlock?.path}</div>
+                      <div><span className="font-semibold">Spiderfoot:</span> {toolStatus.spiderfoot?.path}</div>
+                      {toolStatusMeta.cwd && <div><span className="font-semibold">Server CWD:</span> {toolStatusMeta.cwd}</div>}
+                    </div>
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
           </CardContent>
         </Card>
       )}
